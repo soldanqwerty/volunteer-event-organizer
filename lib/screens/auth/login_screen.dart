@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../home/home_screen.dart';
+import 'registration_screen.dart';
+import 'password_recovery_screen.dart';
 
 /// Login screen, matching mockup S-02.
 ///
@@ -45,10 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Вхід',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+                Text('Вхід', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 24),
                 AppTextField(
                   label: 'Email',
@@ -62,14 +61,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                 ),
                 const SizedBox(height: 24),
-                AppPrimaryButton(
-                  label: 'Увійти',
-                  onPressed: _onLoginPressed,
-                ),
+                AppPrimaryButton(label: 'Увійти', onPressed: _onLoginPressed),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const PasswordRecoveryScreen(),
+                      ),
+                    );
+                  },
                   child: const Text('Забули пароль?'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const RegistrationScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text('Немає акаунту? Зареєструватися'),
                 ),
               ],
             ),

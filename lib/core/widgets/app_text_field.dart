@@ -5,6 +5,7 @@ class AppTextField extends StatelessWidget {
   final String label;
   final TextEditingController? controller;
   final bool obscureText;
+  final bool enabled;
   final String? errorText;
   final TextInputType? keyboardType;
 
@@ -13,6 +14,7 @@ class AppTextField extends StatelessWidget {
     required this.label,
     this.controller,
     this.obscureText = false,
+    this.enabled = true,
     this.errorText,
     this.keyboardType,
   });
@@ -22,8 +24,13 @@ class AppTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       obscureText: obscureText,
+      enabled: enabled,
       keyboardType: keyboardType,
-      decoration: InputDecoration(labelText: label, errorText: errorText),
+      decoration: InputDecoration(
+        labelText: label,
+        errorText: errorText,
+        suffixIcon: !enabled ? const Icon(Icons.lock_outline, size: 18) : null,
+      ),
     );
   }
 }

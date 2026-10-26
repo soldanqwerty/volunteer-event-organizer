@@ -53,4 +53,16 @@ class Validators {
     if (value != original) return 'Паролі не збігаються';
     return null;
   }
+
+  /// Посилання на зображення: обов'язково HTTPS.
+  static String? httpsUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Вставте посилання на зображення';
+    }
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return 'Посилання має починатися з https://';
+    }
+    return null;
+  }
 }

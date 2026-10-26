@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_sidebar.dart';
@@ -69,6 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
       );
+      AnalyticsService.logProfileUpdated();
       if (mounted) _showMessage('Профіль оновлено');
     } on AuthException catch (e) {
       if (mounted) _showMessage(e.message);
@@ -88,6 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         currentPassword: _currentPasswordController.text,
         newPassword: _newPasswordController.text,
       );
+      AnalyticsService.logPasswordChanged();
       if (!mounted) return;
       _currentPasswordController.clear();
       _newPasswordController.clear();
@@ -118,6 +121,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isUpdatingPhoto = true);
     try {
       await _authRepository.updatePhotoUrl(choice.url);
+      AnalyticsService.logAvatarChanged(
+        source: choice.url == null
+            ? 'removed'
+            : choice.url!.contains('dicebear')
+            ? 'preset'
+            : 'custom',
+      );
       if (mounted) {
         _showMessage(choice.url == null ? 'Фото видалено' : 'Фото оновлено');
       }

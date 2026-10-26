@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
@@ -31,6 +32,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
 
     try {
       await _authRepository.sendPasswordReset(email: _emailController.text);
+      AnalyticsService.logPasswordResetRequested();
       if (mounted) setState(() => _isSent = true);
     } on AuthException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));

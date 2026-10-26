@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
@@ -41,6 +42,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
       );
+      AnalyticsService.logSignUp();
       messenger.showSnackBar(
         const SnackBar(content: Text('Обліковий запис створено. Вітаємо!')),
       );

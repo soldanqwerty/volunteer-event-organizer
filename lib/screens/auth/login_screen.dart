@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
@@ -36,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+      AnalyticsService.logLogin();
       messenger.showSnackBar(
         const SnackBar(content: Text('Вхід виконано успішно')),
       );

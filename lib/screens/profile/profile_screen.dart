@@ -1,13 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
-import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_sidebar.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/services/analytics_service.dart';
 import 'avatar_picker_dialog.dart';
 
 /// Екран профілю (макет S-11, вимоги FR-04, FR-05, FR-06).
@@ -157,6 +159,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) setState(() => _isLoggingOut = false);
     }
   }
+
+  // ▼ Sentry: тестові помилки (лише в режимі розробки)
+
+  /// Необроблена помилка — її автоматично перехоплює FlutterError.onError,
+  /// який налаштовує SentryFlutter.init.
+  void _throwUnhandledTestError() {
+    throw StateError('Тестова необроблена помилка VolunteerHub (Sentry)');
+  }
+
+  /// Оброблена (нефатальна) помилка: застосунок працює далі,
+  /// а помилка вручну передається в Sentry.
+  Future<void> _sendHandledTestError() async {
+    try {
+      throw Exception('Тестова оброблена помилка VolunteerHub (Sentry)');
+    } catch (error, stackTrace) {
+      await Sentry.captureException(error, stackTrace: stackTrace);
+      if (mounted) _showMessage('Тестову помилку надіслано в Sentry');
+    }
+  }
+
+  // ▲ Sentry
 
   void _onNavDestinationSelected(int index) {
     switch (index) {
@@ -364,6 +387,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
+            // ▼ Sentry: тестові кнопки, видно лише в режимі розробки
+            if (kDebugMode) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _sendHandledTestError,
+                child: const Text('Тест Sentry: оброблена помилка'),
+              ),
+              TextButton(
+                onPressed: _throwUnhandledTestError,
+                child: const Text('Тест Sentry: необроблена помилка'),
+              ),
+            ],
+            // ▲ Sentry
           ],
         ),
       ),

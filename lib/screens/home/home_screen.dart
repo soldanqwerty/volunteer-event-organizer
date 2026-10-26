@@ -1,10 +1,16 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/widgets/app_sidebar.dart';
 import '../../core/widgets/event_card.dart';
 import '../../core/widgets/task_list_tile.dart';
+import '../../core/widgets/user_avatar.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../profile/profile_screen.dart';
 
+/// Головний екран (макет S-04, вимога FR-07).
+/// Дані користувача надходять із Firebase Auth; заходи й завдання —
+/// тимчасові заглушки до підключення Cloud Firestore.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -13,9 +19,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _userName = 'Олено';
-  static const String _fullName = 'Олена Коваль';
-  static const String _role = 'Координаторка';
+  final _authRepository = AuthRepository();
+  late final Stream<User?> _userStream = _authRepository.userChanges();
 
   static const _nearbyEvents = [
     EventPreview(
@@ -80,7 +85,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: _userStream,
+      initialData: _authRepository.currentUser,
+      builder: (context, snapshot) => _buildContent(context, snapshot.data),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, User? user) {
     final colorScheme = Theme.of(context).colorScheme;
+    final displayName = (user?.displayName ?? '').trim();
+    final firstName = displayName.isEmpty
+        ? 'волонтере'
+        : displayName.split(' ').first;
 
     return Scaffold(
       body: Row(
@@ -119,26 +136,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () {},
                       ),
                       const SizedBox(width: 8),
-                      CircleAvatar(
-                        backgroundColor: colorScheme.primary,
-                        child: Text(
-                          'ОК',
-                          style: TextStyle(
-                            color: colorScheme.onPrimary,
-                            fontSize: 12,
-                          ),
-                        ),
+                      UserAvatar(
+                        photoUrl: user?.photoURL,
+                        initials: UserAvatar.initialsFrom(user?.displayName),
+                        radius: 20,
                       ),
                       const SizedBox(width: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _fullName,
+                            displayName.isEmpty ? 'Без імені' : displayName,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           Text(
-                            _role,
+                            user?.email ?? '',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: colorScheme.onSurfaceVariant),
                           ),
@@ -163,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Вітаємо, $_userName',
+                              'Вітаємо, $firstName',
                               style: Theme.of(context).textTheme.headlineMedium,
                             ),
                             const SizedBox(height: 4),

@@ -32,13 +32,12 @@ enum EventSort {
 /// на захід і керування заявками учасників.
 class EventsModel extends ChangeNotifier {
   EventsModel({
-    required EventRepository repository,
-    required PreferencesService preferences,
+    required this._repository,
+    required this._preferences,
     required this.currentUserId,
     required this.currentUserName,
     required this.currentUserEmail,
-  })  : _repository = repository,
-        _preferences = preferences;
+  });
 
   final EventRepository _repository;
   final PreferencesService _preferences;

@@ -18,11 +18,10 @@ enum TaskSort {
 /// (FR-14 – FR-17).
 class TasksModel extends ChangeNotifier {
   TasksModel({
-    required EventRepository repository,
-    required PreferencesService preferences,
+    required this._repository,
+    required this._preferences,
     required this.currentUserId,
-  })  : _repository = repository,
-        _preferences = preferences;
+  });
 
   final EventRepository _repository;
   final PreferencesService _preferences;

@@ -35,7 +35,7 @@ class TaskListTile extends StatelessWidget {
 
     final details = <String>[
       DateFormatter.relativeDay(task.dueDate),
-      if (subtitle != null) subtitle!,
+      ?subtitle,
       if (showAssignee) task.assigneeName ?? 'Не призначено',
     ];
 
@@ -76,7 +76,7 @@ class TaskListTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _StatusChip(task: task, onChanged: onStatusChanged),
-            if (trailingAction != null) trailingAction!,
+            ?trailingAction,
           ],
         ),
       ),

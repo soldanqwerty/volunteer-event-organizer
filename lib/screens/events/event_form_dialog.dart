@@ -227,6 +227,7 @@ class _EventFormDialogState extends State<EventFormDialog> {
                   // з'явиться разом зі сховищем файлів, а поки обкладинка
                   // формується з категорії.
                   child: DropdownButtonFormField<EventCategory>(
+                    isExpanded: true,
                     initialValue: _category,
                     decoration: const InputDecoration(labelText: 'Категорія'),
                     items: [

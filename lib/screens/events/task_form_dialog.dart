@@ -186,6 +186,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String?>(
+                    isExpanded: true,
                     initialValue: selectedAssignee,
                     decoration: const InputDecoration(labelText: 'Виконавець'),
                     items: [

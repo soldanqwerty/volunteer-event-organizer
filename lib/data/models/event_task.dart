@@ -14,9 +14,9 @@ enum TaskPriority {
 
 /// Статус виконання завдання.
 enum TaskStatus {
-  newTask('Нове', Colors.green),
-  inProgress('У роботі', Colors.blue),
-  done('Виконано', Colors.grey);
+  newTask('Нове', Color(0xFF2E7D32)),
+  inProgress('У роботі', Color(0xFFB7791F)),
+  done('Виконано', Color(0xFF616161));
 
   const TaskStatus(this.label, this.color);
 

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/utils/date_formatter.dart';
+import '../../core/widgets/app_top_bar.dart';
 import '../../core/widgets/confirm_delete_dialog.dart';
-import '../../core/widgets/task_list_tile.dart';
+import '../../core/widgets/event_cover.dart';
+import '../../core/widgets/simple_table.dart';
+import '../../core/widgets/status_pill.dart';
+import '../../core/widgets/task_status_pill.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../data/models/event_task.dart';
 import '../../data/models/participant.dart';
 import '../../data/models/volunteer_event.dart';
@@ -12,34 +17,109 @@ import '../../state/tasks_model.dart';
 import 'event_form_dialog.dart';
 import 'task_form_dialog.dart';
 
-/// Екран деталей заходу (макет S-06) з вкладками «Опис», «Учасники»
-/// та «Завдання». Набір дій залежить від ролі: організатор редагує й
-/// видаляє захід, керує заявками та завданнями; волонтер записується
-/// на захід або скасовує участь.
+/// Екран деталей заходу (макет S-06, FR-09 – FR-17).
+///
+/// Ліворуч — картка заходу з діями, праворуч — вкладки «Опис»,
+/// «Учасники» та «Завдання». Набір дій залежить від ролі: організатор
+/// редагує й видаляє захід, керує заявками та завданнями; волонтер
+/// долучається до заходу або скасовує участь.
 class EventDetailsScreen extends StatelessWidget {
   /// Передаємо id, а не об'єкт: після редагування екран бере
   /// актуальну версію заходу з EventsModel.
   final String eventId;
+  final VoidCallback onBack;
 
-  const EventDetailsScreen({super.key, required this.eventId});
+  const EventDetailsScreen({
+    super.key,
+    required this.eventId,
+    required this.onBack,
+  });
 
-  Future<void> _deleteEvent(BuildContext context, VolunteerEvent event) async {
+  @override
+  Widget build(BuildContext context) {
+    // select: екран перебудовується лише тоді, коли змінився сам захід.
+    final event = context.select<EventsModel, VolunteerEvent?>(
+      (m) => m.eventById(eventId),
+    );
+
+    // Захід видалено — нічого не показуємо, onBack уже викликано.
+    if (event == null) return const SizedBox.shrink();
+
+    final isOrganizer = context.read<EventsModel>().isOrganizer(event);
+
+    return Column(
+      children: [
+        AppTopBar(
+          title: 'Деталі заходу',
+          subtitle: 'Заходи / ${event.title}',
+          onBack: onBack,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 340,
+                  child: _EventInfoCard(
+                    event: event,
+                    isOrganizer: isOrganizer,
+                    onDeleted: onBack,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _TabsCard(event: event, isOrganizer: isOrganizer),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ------------------------------------------------- Ліва картка заходу
+
+class _EventInfoCard extends StatelessWidget {
+  final VolunteerEvent event;
+  final bool isOrganizer;
+  final VoidCallback onDeleted;
+
+  const _EventInfoCard({
+    required this.event,
+    required this.isOrganizer,
+    required this.onDeleted,
+  });
+
+  Future<void> _delete(BuildContext context) async {
+    final events = context.read<EventsModel>();
+    final tasks = context.read<TasksModel>();
+    final participantsCount = events.participantsOf(event.id).length;
+    final tasksCount = tasks.tasksOf(event.id).length;
+
     final confirmed = await showConfirmDeleteDialog(
       context,
       title: 'Видалити захід?',
-      message: 'Захід «${event.title}», його учасників і завдання буде '
-          'видалено. Цю дію неможливо скасувати.',
+      message: 'Цю дію неможливо скасувати. Захід, учасники та завдання '
+          'будуть видалені назавжди.',
+      details: [
+        (
+          Icons.calendar_today_outlined,
+          '${event.title} — ${DateFormatter.dayMonth(event.dateTime)}',
+        ),
+        (Icons.group_outlined, 'Зареєстрованих учасників: $participantsCount'),
+        (Icons.task_alt, "Пов'язаних завдань: $tasksCount"),
+      ],
     );
     if (!confirmed || !context.mounted) return;
 
-    final events = context.read<EventsModel>();
-    final tasks = context.read<TasksModel>();
-    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-
     if (await events.deleteEvent(event.id)) {
       tasks.removeTasksOfEvent(event.id);
-      navigator.pop();
+      onDeleted();
       messenger.showSnackBar(const SnackBar(content: Text('Захід видалено')));
     } else {
       messenger.showSnackBar(
@@ -50,49 +130,337 @@ class EventDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // select: екран перебудовується лише тоді, коли змінився сам захід.
-    final event = context.select<EventsModel, VolunteerEvent?>(
-      (m) => m.eventById(eventId),
-    );
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    // Захід видалено — показуємо порожній екран, поки виконується pop.
-    if (event == null) return const Scaffold();
+    // Consumer перебудовує лише цю картку, коли змінюються учасники.
+    return Consumer<EventsModel>(
+      builder: (context, model, _) {
+        final confirmed = model.confirmedCount(event.id);
+        final badge = RegistrationBadge.of(event, confirmed);
+        final participation = model.myParticipation(event.id);
 
-    final isOrganizer = context.read<EventsModel>().isOrganizer(event);
-
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(event.title),
-          actions: [
-            if (isOrganizer) ...[
-              IconButton(
-                tooltip: 'Редагувати',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => showEventFormDialog(context, event: event),
+        return Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 170,
+                child: EventCover(
+                  category: event.category,
+                  iconSize: 64,
+                  topLeft: StatusPill(
+                    label: event.category.label,
+                    color: event.category.color,
+                    onImage: true,
+                  ),
+                  bottomLeft: StatusPill(
+                    label: badge == RegistrationBadge.open ||
+                            badge == RegistrationBadge.soon
+                        ? 'Реєстрація відкрита'
+                        : badge.label,
+                    color: badge.color,
+                    onImage: true,
+                  ),
+                ),
               ),
-              IconButton(
-                tooltip: 'Видалити',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _deleteEvent(context, event),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.title,
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        event.description,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _LabeledInfo(
+                        icon: Icons.schedule,
+                        label: 'ДАТА Й ЧАС',
+                        value: DateFormatter.dayMonthTimeRange(
+                          event.dateTime,
+                          event.endDateTime,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _LabeledInfo(
+                        icon: Icons.location_on_outlined,
+                        label: 'АДРЕСА',
+                        value: event.location,
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            UserAvatar(
+                              photoUrl: null,
+                              initials:
+                                  UserAvatar.initialsFrom(event.organizerName),
+                              radius: 16,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Організатор',
+                                    style: theme.textTheme.labelSmall,
+                                  ),
+                                  Text(
+                                    event.organizerName,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.group_outlined,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text('$confirmed/${event.participantLimit}'),
+                          ],
+                        ),
+                      ),
+                      if (participation != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Text('Ваша заявка: '),
+                            StatusPill(
+                              label: participation.status.label,
+                              color: participation.status.color,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _MainAction(
+                        event: event,
+                        model: model,
+                        isOrganizer: isOrganizer,
+                        participation: participation,
+                      ),
+                    ),
+                    if (isOrganizer) ...[
+                      const SizedBox(width: 8),
+                      IconButton.outlined(
+                        tooltip: 'Редагувати',
+                        onPressed: () =>
+                            showEventFormDialog(context, event: event),
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.outlined(
+                        tooltip: 'Видалити',
+                        color: colorScheme.error,
+                        onPressed: () => _delete(context),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
-          ],
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Опис'),
-              Tab(text: 'Учасники'),
-              Tab(text: 'Завдання'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Головна кнопка картки: «Долучитися» / «Скасувати участь» (FR-12).
+class _MainAction extends StatelessWidget {
+  final VolunteerEvent event;
+  final EventsModel model;
+  final bool isOrganizer;
+  final Participant? participation;
+
+  const _MainAction({
+    required this.event,
+    required this.model,
+    required this.isOrganizer,
+    required this.participation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = FilledButton.styleFrom(minimumSize: const Size(0, 48));
+
+    if (isOrganizer) {
+      return FilledButton.tonalIcon(
+        style: style,
+        onPressed: null,
+        icon: const Icon(Icons.star_outline),
+        label: const Text('Ви організатор'),
+      );
+    }
+    if (event.isPast) {
+      return FilledButton(
+        style: style,
+        onPressed: null,
+        child: const Text('Захід завершився'),
+      );
+    }
+    if (participation != null) {
+      return OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+        onPressed: model.isSaving ? null : () => model.leaveEvent(event),
+        icon: const Icon(Icons.logout),
+        label: const Text('Скасувати участь'),
+      );
+    }
+    if (model.isFull(event)) {
+      return FilledButton(
+        style: style,
+        onPressed: null,
+        child: const Text('Місць немає'),
+      );
+    }
+    return FilledButton.icon(
+      style: style,
+      onPressed: model.isSaving ? null : () => model.joinEvent(event),
+      icon: const Icon(Icons.group_add_outlined),
+      label: const Text('Долучитися'),
+    );
+  }
+}
+
+class _LabeledInfo extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _LabeledInfo({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Icon(icon, size: 16, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
             ],
           ),
         ),
-        body: TabBarView(
+      ],
+    );
+  }
+}
+
+// ------------------------------------------------- Права картка з вкладками
+
+class _TabsCard extends StatelessWidget {
+  final VolunteerEvent event;
+  final bool isOrganizer;
+
+  const _TabsCard({required this.event, required this.isOrganizer});
+
+  @override
+  Widget build(BuildContext context) {
+    final participantsCount = context.select<EventsModel, int>(
+      (m) => m.participantsOf(event.id).length,
+    );
+
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: DefaultTabController(
+        // Як на макеті, за замовчуванням відкрито «Учасники».
+        length: 3,
+        initialIndex: 1,
+        child: Column(
           children: [
-            _DescriptionTab(event: event),
-            _ParticipantsTab(event: event, isOrganizer: isOrganizer),
-            _TasksTab(event: event, isOrganizer: isOrganizer),
+            TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                const Tab(text: 'Опис'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Учасники'),
+                      const SizedBox(width: 6),
+                      Badge(
+                        label: Text('$participantsCount'),
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        textColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ],
+                  ),
+                ),
+                const Tab(text: 'Завдання'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _DescriptionTab(event: event),
+                  _ParticipantsTab(event: event, isOrganizer: isOrganizer),
+                  _TasksTab(event: event, isOrganizer: isOrganizer),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -109,138 +477,74 @@ class _DescriptionTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
 
     return ListView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Chip(
-            avatar: CircleAvatar(
-              radius: 5,
-              backgroundColor: event.category.color,
-            ),
-            label: Text(event.category.label),
-            side: BorderSide.none,
-            backgroundColor: event.category.color.withValues(alpha: 0.12),
-          ),
+        Text(
+          'Про захід',
+          style: theme.textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 16),
-        _InfoRow(
-          icon: Icons.calendar_today,
-          text: DateFormatter.weekdayDayMonth(event.dateTime),
-        ),
-        _InfoRow(
-          icon: Icons.access_time,
-          text: DateFormatter.time(event.dateTime),
-        ),
-        _InfoRow(icon: Icons.location_on_outlined, text: event.location),
-        _InfoRow(
-          icon: Icons.person_outline,
-          text: 'Організатор: ${event.organizerName}',
-        ),
+        const SizedBox(height: 12),
+        Text(event.description, style: theme.textTheme.bodyLarge),
         const SizedBox(height: 24),
-        Text('Опис', style: textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(event.description, style: textTheme.bodyLarge),
-        const SizedBox(height: 32),
-        _ParticipationPanel(event: event),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _InfoTile(label: 'Категорія', value: event.category.label),
+            _InfoTile(
+              label: 'Дата',
+              value: DateFormatter.weekdayDayMonth(event.dateTime),
+            ),
+            _InfoTile(
+              label: 'Час',
+              value: DateFormatter.timeRange(
+                event.dateTime,
+                event.endDateTime,
+              ),
+            ),
+            _InfoTile(
+              label: 'Ліміт учасників',
+              value: '${event.participantLimit}',
+            ),
+          ],
+        ),
       ],
     );
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
+class _InfoTile extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _InfoRow({required this.icon, required this.text});
+  const _InfoTile({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+    final theme = Theme.of(context);
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text)),
+          Text(label, style: theme.textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
         ],
       ),
-    );
-  }
-}
-
-/// Блок запису на захід (FR-12). Consumer перебудовує лише цю частину
-/// екрана, коли змінюється список учасників.
-class _ParticipationPanel extends StatelessWidget {
-  final VolunteerEvent event;
-
-  const _ParticipationPanel({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<EventsModel>(
-      builder: (context, model, _) {
-        final confirmed = model.confirmedCount(event.id);
-        final progress = (confirmed / event.participantLimit).clamp(0.0, 1.0);
-        final participation = model.myParticipation(event.id);
-
-        Widget action;
-        if (model.isOrganizer(event)) {
-          action = const Text('Ви організатор цього заходу');
-        } else if (event.isPast) {
-          action = const Text('Захід уже завершився');
-        } else if (participation != null) {
-          action = Wrap(
-            spacing: 16,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Chip(
-                label: Text(participation.status.label),
-                side: BorderSide.none,
-                labelStyle: TextStyle(color: participation.status.color),
-                backgroundColor:
-                    participation.status.color.withValues(alpha: 0.12),
-              ),
-              OutlinedButton(
-                onPressed: model.isSaving
-                    ? null
-                    : () => model.leaveEvent(event),
-                child: const Text('Скасувати участь'),
-              ),
-            ],
-          );
-        } else if (model.isFull(event)) {
-          action = const Text('Усі місця зайняті');
-        } else {
-          action = FilledButton.icon(
-            onPressed: model.isSaving ? null : () => model.joinEvent(event),
-            icon: const Icon(Icons.how_to_reg),
-            label: const Text('Записатися'),
-          );
-        }
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Учасники: $confirmed з ${event.participantLimit}',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(value: progress),
-                const SizedBox(height: 16),
-                action,
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -253,51 +557,11 @@ class _ParticipantsTab extends StatelessWidget {
 
   const _ParticipantsTab({required this.event, required this.isOrganizer});
 
-  @override
-  Widget build(BuildContext context) {
-    final model = context.watch<EventsModel>();
-    final participants = model.participantsOf(event.id);
-
-    if (participants.isEmpty) {
-      return const Center(child: Text('Поки що ніхто не записався'));
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(32),
-      itemCount: participants.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final participant = participants[index];
-        return ListTile(
-          leading: CircleAvatar(child: Text(participant.name[0])),
-          title: Text(participant.name),
-          subtitle: Text(participant.email),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                participant.status.label,
-                style: TextStyle(color: participant.status.color),
-              ),
-              if (isOrganizer)
-                _ParticipantMenu(participant: participant, model: model),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Меню організатора: підтвердити, відхилити або видалити учасника
-/// (FR-13).
-class _ParticipantMenu extends StatelessWidget {
-  final Participant participant;
-  final EventsModel model;
-
-  const _ParticipantMenu({required this.participant, required this.model});
-
-  Future<void> _remove(BuildContext context) async {
+  Future<void> _remove(
+    BuildContext context,
+    EventsModel model,
+    Participant participant,
+  ) async {
     final confirmed = await showConfirmDeleteDialog(
       context,
       title: 'Видалити учасника?',
@@ -308,31 +572,155 @@ class _ParticipantMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Дії',
-      enabled: !model.isSaving,
-      onSelected: (action) {
-        switch (action) {
-          case 'confirm':
-            model.setParticipantStatus(
-              participant,
-              ParticipantStatus.confirmed,
-            );
-          case 'reject':
-            model.setParticipantStatus(
-              participant,
-              ParticipantStatus.rejected,
-            );
-          case 'remove':
-            _remove(context);
-        }
-      },
-      itemBuilder: (_) => [
-        if (participant.status != ParticipantStatus.confirmed)
-          const PopupMenuItem(value: 'confirm', child: Text('Підтвердити')),
-        if (participant.status != ParticipantStatus.rejected)
-          const PopupMenuItem(value: 'reject', child: Text('Відхилити')),
-        const PopupMenuItem(value: 'remove', child: Text('Видалити')),
+    final theme = Theme.of(context);
+    final model = context.watch<EventsModel>();
+    final participants = model.participantsOf(event.id);
+    final free = (event.participantLimit - model.confirmedCount(event.id))
+        .clamp(0, event.participantLimit);
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Учасники',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    isOrganizer
+                        ? 'Керуйте заявками учасників цього заходу'
+                        : 'Волонтери, які долучилися до заходу',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer
+                    .withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text('Вільних місць', style: theme.textTheme.labelSmall),
+                  Text(
+                    '$free із ${event.participantLimit}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (participants.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: Text('Поки що ніхто не долучився')),
+          )
+        else
+          SimpleTable(
+            columns: const [('УЧАСНИК', 5), ('СТАТУС', 3), ('ДІЇ', 2)],
+            rows: [
+              for (final p in participants)
+                [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.6),
+                        child: Text(
+                          UserAvatar.initialsFrom(p.name),
+                          style: theme.textTheme.labelMedium,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.name,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              p.email,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: StatusPill(
+                      label: p.status.label,
+                      color: p.status.color,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: !isOrganizer
+                        ? const SizedBox.shrink()
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _SquareAction(
+                                icon: Icons.check,
+                                color: Colors.green,
+                                tooltip: 'Підтвердити',
+                                onPressed: model.isSaving ||
+                                        p.status == ParticipantStatus.confirmed
+                                    ? null
+                                    : () => model.setParticipantStatus(
+                                          p,
+                                          ParticipantStatus.confirmed,
+                                        ),
+                              ),
+                              const SizedBox(width: 6),
+                              _SquareAction(
+                                icon: Icons.close,
+                                color: Colors.red,
+                                // Відхилену заявку можна прибрати зі списку.
+                                tooltip: p.status == ParticipantStatus.rejected
+                                    ? 'Видалити зі списку'
+                                    : 'Відхилити',
+                                onPressed: model.isSaving
+                                    ? null
+                                    : p.status == ParticipantStatus.rejected
+                                        ? () => _remove(context, model, p)
+                                        : () => model.setParticipantStatus(
+                                              p,
+                                              ParticipantStatus.rejected,
+                                            ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+            ],
+          ),
+        const SizedBox(height: 12),
+        Text(
+          'Показано ${participants.length} з ${participants.length} учасників',
+          style: theme.textTheme.bodySmall,
+        ),
       ],
     );
   }
@@ -351,59 +739,193 @@ class _TasksTab extends StatelessWidget {
     final confirmed = await showConfirmDeleteDialog(
       context,
       title: 'Видалити завдання?',
-      message: 'Завдання «${task.title}» буде видалено.',
+      message: 'Цю дію неможливо скасувати.',
+      details: [
+        (Icons.task_alt, task.title),
+        (Icons.calendar_today_outlined,
+            'Термін: ${DateFormatter.dayMonth(task.dueDate)}'),
+      ],
     );
     if (confirmed) await tasks.deleteTask(task.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final tasksModel = context.watch<TasksModel>();
     final tasks = tasksModel.tasksOf(event.id);
     final currentUserId = tasksModel.currentUserId;
 
-    return Scaffold(
-      floatingActionButton: isOrganizer
-          ? FloatingActionButton.extended(
-              onPressed: () => showTaskFormDialog(context, event: event),
-              icon: const Icon(Icons.add_task),
-              label: const Text('Додати завдання'),
-            )
-          : null,
-      body: tasks.isEmpty
-          ? const Center(child: Text('Завдань ще немає'))
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(32, 32, 32, 96),
-              itemCount: tasks.length,
-              itemBuilder: (context, index) {
-                final task = tasks[index];
-                // Статус змінює організатор або виконавець (FR-16).
-                final canChangeStatus =
-                    isOrganizer || task.assigneeId == currentUserId;
-
-                return TaskListTile(
-                  task: task,
-                  showAssignee: true,
-                  onTap: isOrganizer
-                      ? () => showTaskFormDialog(
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Завдань: ${tasks.length}',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (isOrganizer)
+              FilledButton.icon(
+                onPressed: () => showTaskFormDialog(context, event: event),
+                icon: const Icon(Icons.add),
+                label: const Text('Додати завдання'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (tasks.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: Text('Завдань ще немає')),
+          )
+        else
+          SimpleTable(
+            columns: [
+              ('ЗАВДАННЯ', 5),
+              ('ВИКОНАВЕЦЬ', 4),
+              ('ТЕРМІН', 3),
+              ('СТАТУС', 3),
+              if (isOrganizer) ('ДІЇ', 2),
+            ],
+            rows: [
+              for (final task in tasks)
+                [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 4,
+                        backgroundColor: task.priority.color,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  task.assigneeName == null
+                      ? Text(
+                          'Не призначено',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic),
+                        )
+                      : Row(
+                          children: [
+                            UserAvatar(
+                              photoUrl: null,
+                              initials:
+                                  UserAvatar.initialsFrom(task.assigneeName),
+                              radius: 12,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                task.assigneeName!,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(DateFormatter.dayMonth(task.dueDate)),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TaskStatusPill(
+                      task: task,
+                      // Статус змінює організатор або виконавець (FR-16).
+                      onChanged: isOrganizer || task.assigneeId == currentUserId
+                          ? (status) => tasksModel.changeStatus(task, status)
+                          : null,
+                    ),
+                  ),
+                  if (isOrganizer)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _SquareAction(
+                          icon: Icons.edit_outlined,
+                          color: theme.colorScheme.onSurface,
+                          tooltip: 'Редагувати',
+                          onPressed: () => showTaskFormDialog(
                             context,
                             event: event,
                             task: task,
-                          )
-                      : null,
-                  onStatusChanged: canChangeStatus
-                      ? (status) => tasksModel.changeStatus(task, status)
-                      : null,
-                  trailingAction: isOrganizer
-                      ? IconButton(
-                          tooltip: 'Видалити завдання',
-                          icon: const Icon(Icons.delete_outline),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        _SquareAction(
+                          icon: Icons.delete_outline,
+                          color: Colors.red,
+                          tooltip: 'Видалити',
                           onPressed: () => _delete(context, task),
-                        )
-                      : null,
-                );
-              },
-            ),
+                        ),
+                      ],
+                    ),
+                ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+// ------------------------------------------------------ Спільні елементи
+
+/// Маленька квадратна кнопка дії (✓, ✕, олівець, кошик) з макета.
+class _SquareAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _SquareAction({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: onPressed == null
+                ? Colors.transparent
+                : color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: onPressed == null ? color.withValues(alpha: 0.4) : color,
+          ),
+        ),
+      ),
     );
   }
 }

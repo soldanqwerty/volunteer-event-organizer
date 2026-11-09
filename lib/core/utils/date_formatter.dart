@@ -49,6 +49,14 @@ class DateFormatter {
   static String dayMonthTime(DateTime date) =>
       '${dayMonth(date)}, ${time(date)}';
 
+  /// «10:00–13:00».
+  static String timeRange(DateTime start, DateTime end) =>
+      '${time(start)}–${time(end)}';
+
+  /// «24 травня, 10:00–13:00».
+  static String dayMonthTimeRange(DateTime start, DateTime end) =>
+      '${dayMonth(start)}, ${timeRange(start, end)}';
+
   /// «Сьогодні, 18:00», «Завтра, 12:00» або «27 жовтня».
   static String relativeDay(DateTime date) {
     final now = DateTime.now();

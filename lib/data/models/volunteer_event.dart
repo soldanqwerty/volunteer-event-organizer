@@ -23,7 +23,11 @@ class VolunteerEvent {
   final String title;
   final String description;
   final EventCategory category;
+  /// Початок заходу.
   final DateTime dateTime;
+
+  /// Завершення заходу (макет S-07: поля «Початок» і «Завершення»).
+  final DateTime endDateTime;
   final String location;
 
   /// Максимальна кількість учасників (FR-08).
@@ -40,6 +44,7 @@ class VolunteerEvent {
     required this.description,
     required this.category,
     required this.dateTime,
+    required this.endDateTime,
     required this.location,
     required this.participantLimit,
     required this.organizerId,
@@ -48,13 +53,14 @@ class VolunteerEvent {
 
   bool isOrganizedBy(String? userId) => userId != null && userId == organizerId;
 
-  bool get isPast => dateTime.isBefore(DateTime.now());
+  bool get isPast => endDateTime.isBefore(DateTime.now());
 
   VolunteerEvent copyWith({
     String? title,
     String? description,
     EventCategory? category,
     DateTime? dateTime,
+    DateTime? endDateTime,
     String? location,
     int? participantLimit,
   }) {
@@ -64,6 +70,7 @@ class VolunteerEvent {
       description: description ?? this.description,
       category: category ?? this.category,
       dateTime: dateTime ?? this.dateTime,
+      endDateTime: endDateTime ?? this.endDateTime,
       location: location ?? this.location,
       participantLimit: participantLimit ?? this.participantLimit,
       organizerId: organizerId,

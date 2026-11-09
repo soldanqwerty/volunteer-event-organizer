@@ -72,6 +72,7 @@ class InMemoryEventRepository implements EventRepository {
       description: draft.description,
       category: draft.category,
       dateTime: draft.dateTime,
+      endDateTime: draft.endDateTime,
       location: draft.location,
       participantLimit: draft.participantLimit,
       organizerId: draft.organizerId,

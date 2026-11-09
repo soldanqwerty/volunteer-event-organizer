@@ -218,6 +218,7 @@ class EventsModel extends ChangeNotifier {
     required String description,
     required EventCategory category,
     required DateTime dateTime,
+    required DateTime endDateTime,
     required String location,
     required int participantLimit,
   }) {
@@ -229,6 +230,7 @@ class EventsModel extends ChangeNotifier {
           description: description,
           category: category,
           dateTime: dateTime,
+          endDateTime: endDateTime,
           location: location,
           participantLimit: participantLimit,
           organizerId: currentUserId,

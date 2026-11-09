@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Статус заявки учасника на захід.
 enum ParticipantStatus {
-  pending('Очікує підтвердження', Colors.orange),
+  pending('Очікує', Colors.orange),
   confirmed('Підтверджено', Colors.green),
   rejected('Відхилено', Colors.red);
 

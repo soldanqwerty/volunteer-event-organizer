@@ -48,6 +48,7 @@ void main() {
       description: 'Опис',
       category: EventCategory.education,
       dateTime: DateTime.now().add(const Duration(days: 3)),
+      endDateTime: DateTime.now().add(const Duration(days: 3, hours: 2)),
       location: 'Львів',
       participantLimit: 5,
     );

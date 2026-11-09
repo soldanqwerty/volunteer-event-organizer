@@ -11,6 +11,9 @@ class DateTimeField extends StatelessWidget {
   final bool enabled;
   final DateTime? firstDate;
 
+  /// Текст помилки під полем (наприклад, «Завершення раніше за початок»).
+  final String? errorText;
+
   const DateTimeField({
     super.key,
     required this.label,
@@ -18,6 +21,7 @@ class DateTimeField extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
     this.firstDate,
+    this.errorText,
   });
 
   Future<void> _pick(BuildContext context) async {
@@ -50,7 +54,8 @@ class DateTimeField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           enabled: enabled,
-          suffixIcon: const Icon(Icons.calendar_month_outlined),
+          errorText: errorText,
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
         ),
         child: Text(DateFormatter.dayMonthTime(value)),
       ),

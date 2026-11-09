@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/date_time_field.dart';
+import '../../core/widgets/form_dialog_shell.dart';
 import '../../data/models/event_task.dart';
 import '../../data/models/participant.dart';
 import '../../data/models/volunteer_event.dart';
@@ -129,6 +130,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isSaving = context.watch<TasksModel>().isSaving;
     final options = _assigneeOptions(context.watch<EventsModel>());
 
@@ -136,108 +138,197 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
     final selectedAssignee =
         options.any((a) => a.id == _assigneeId) ? _assigneeId : null;
 
-    return AlertDialog(
-      title: Text(_isEditing ? 'Редагування завдання' : 'Нове завдання'),
-      content: SizedBox(
-        width: 480,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return FormDialogShell(
+      icon: Icons.task_alt,
+      title: _isEditing ? 'Редагувати завдання' : 'Додати завдання',
+      subtitle: _isEditing
+          ? 'Змініть деталі завдання'
+          : 'Заповніть деталі нового завдання',
+      isSaving: isSaving,
+      onSave: () => _onSavePressed(options),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppTextField(
+              label: 'Назва завдання',
+              controller: _titleController,
+              enabled: !isSaving,
+              suffixIcon: const Icon(Icons.label_outline),
+              validator: (v) =>
+                  Validators.required(v, 'Введіть назву завдання'),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _descriptionController,
+              enabled: !isSaving,
+              minLines: 3,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Опис',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppTextField(
-                  label: 'Назва завдання',
-                  controller: _titleController,
-                  enabled: !isSaving,
-                  validator: (v) =>
-                      Validators.required(v, 'Введіть назву завдання'),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _descriptionController,
-                  enabled: !isSaving,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: "Опис (необов'язково)",
+                Expanded(
+                  child: DateTimeField(
+                    label: 'Строк виконання',
+                    value: _dueDate,
+                    enabled: !isSaving,
+                    onChanged: (value) => setState(() => _dueDate = value),
                   ),
                 ),
-                const SizedBox(height: 16),
-                DateTimeField(
-                  label: 'Термін виконання',
-                  value: _dueDate,
-                  enabled: !isSaving,
-                  onChanged: (value) => setState(() => _dueDate = value),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<TaskPriority>(
-                  initialValue: _priority,
-                  decoration: const InputDecoration(labelText: 'Пріоритет'),
-                  items: [
-                    for (final priority in TaskPriority.values)
-                      DropdownMenuItem(
-                        value: priority,
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 5,
-                              backgroundColor: priority.color,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(priority.label),
-                          ],
-                        ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: selectedAssignee,
+                    decoration: const InputDecoration(labelText: 'Виконавець'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Не призначено'),
                       ),
-                  ],
-                  onChanged: isSaving
-                      ? null
-                      : (value) => setState(() => _priority = value!),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String?>(
-                  initialValue: selectedAssignee,
-                  decoration: const InputDecoration(labelText: 'Виконавець'),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('Не призначено'),
-                    ),
-                    for (final a in options)
-                      DropdownMenuItem<String?>(
-                        value: a.id,
-                        child: Text(
-                          a.id == widget.event.organizerId
-                              ? '${a.name} (організатор)'
-                              : a.name,
+                      for (final a in options)
+                        DropdownMenuItem<String?>(
+                          value: a.id,
+                          child: Text(
+                            a.id == widget.event.organizerId
+                                ? '${a.name} (організатор)'
+                                : a.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                  ],
-                  onChanged: isSaving
-                      ? null
-                      : (value) => setState(() => _assigneeId = value),
+                    ],
+                    onChanged: isSaving
+                        ? null
+                        : (value) => setState(() => _assigneeId = value),
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            Text(
+              'Пріоритет',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _PrioritySelector(
+              value: _priority,
+              enabled: !isSaving,
+              onChanged: (value) => setState(() => _priority = value),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _priority.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${_priorityIcon(_priority)} ${_priority.label} пріоритет',
+                style: TextStyle(
+                  color: _priority.color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: isSaving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Скасувати'),
-        ),
-        FilledButton(
-          onPressed: isSaving ? null : () => _onSavePressed(options),
-          child: isSaving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(_isEditing ? 'Зберегти' : 'Створити'),
-        ),
-      ],
+    );
+  }
+}
+
+String _priorityIcon(TaskPriority priority) {
+  switch (priority) {
+    case TaskPriority.low:
+      return '↓';
+    case TaskPriority.medium:
+      return '—';
+    case TaskPriority.high:
+      return '↑';
+  }
+}
+
+/// Три кнопки вибору пріоритету в один ряд, як на макеті S-10.
+class _PrioritySelector extends StatelessWidget {
+  final TaskPriority value;
+  final bool enabled;
+  final ValueChanged<TaskPriority> onChanged;
+
+  const _PrioritySelector({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  static const _icons = {
+    TaskPriority.low: Icons.arrow_downward,
+    TaskPriority.medium: Icons.remove,
+    TaskPriority.high: Icons.arrow_upward,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final border = Theme.of(context).colorScheme.outlineVariant;
+
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        children: [
+          for (final priority in TaskPriority.values) ...[
+            if (priority != TaskPriority.values.first)
+              VerticalDivider(width: 1, color: border),
+            Expanded(
+              child: Material(
+                color: priority == value
+                    ? priority.color.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                child: InkWell(
+                  onTap: enabled ? () => onChanged(priority) : null,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _icons[priority],
+                        size: 16,
+                        color: priority == value ? priority.color : null,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        priority.label,
+                        style: TextStyle(
+                          color: priority == value ? priority.color : null,
+                          fontWeight: priority == value
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      if (priority == value) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.check, size: 16, color: priority.color),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

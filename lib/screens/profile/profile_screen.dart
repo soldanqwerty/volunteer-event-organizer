@@ -211,126 +211,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final displayName = profile.displayName;
     final isLoggingOut = context.select<AuthModel, bool>((m) => m.isLoading);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Stack(
-              alignment: Alignment.bottomRight,
+    // Як на макеті S-11, кнопка «Вийти» розташована під карткою.
+    return Column(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
               children: [
-                UserAvatar(
-                  photoUrl: profile.photoUrl,
-                  initials: UserAvatar.initialsFrom(profile.displayName),
-                  radius: 40,
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: colorScheme.surface, width: 2),
-                  ),
-                  child: profile.isUpdatingPhoto
-                      ? Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    UserAvatar(
+                      photoUrl: profile.photoUrl,
+                      initials: UserAvatar.initialsFrom(profile.displayName),
+                      radius: 40,
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colorScheme.surface, width: 2),
+                      ),
+                      child: profile.isUpdatingPhoto
+                          ? Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.onPrimary,
+                                ),
+                              ),
+                            )
+                          : IconButton(
+                              tooltip: 'Змінити фото',
+                              icon: const Icon(Icons.camera_alt, size: 14),
                               color: colorScheme.onPrimary,
+                              onPressed: () => _onChangePhotoPressed(profile),
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  displayName.isEmpty ? 'Без імені' : displayName,
+                  style: textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                Text(
+                  profile.email,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                // Заглушка: статистика з'явиться після підключення Firestore.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Внесок цього місяця', style: textTheme.bodySmall),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.favorite,
+                            size: 16,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '18 год',
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        )
-                      : IconButton(
-                          tooltip: 'Змінити фото',
-                          icon: const Icon(Icons.camera_alt, size: 14),
-                          color: colorScheme.onPrimary,
-                          onPressed: () => _onChangePhotoPressed(profile),
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          padding: EdgeInsets.zero,
-                        ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              displayName.isEmpty ? 'Без імені' : displayName,
-              style: textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              profile.email,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            // Заглушка: статистика з'явиться після підключення Firestore.
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Внесок цього місяця', style: textTheme.bodySmall),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.favorite,
-                        size: 16,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '18 год',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: isLoggingOut ? null : _onLogoutPressed,
-                icon: const Icon(Icons.logout),
-                label: const Text('Вийти'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.error,
-                  side: BorderSide(color: colorScheme.error),
                 ),
-              ),
+              ],
             ),
-            // ▼ Sentry: тестові кнопки, видно лише в режимі розробки
-            if (kDebugMode) ...[
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _sendHandledTestError,
-                child: const Text('Тест Sentry: оброблена помилка'),
-              ),
-              TextButton(
-                onPressed: _throwUnhandledTestError,
-                child: const Text('Тест Sentry: необроблена помилка'),
-              ),
-            ],
-            // ▲ Sentry
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: isLoggingOut ? null : _onLogoutPressed,
+            icon: const Icon(Icons.logout),
+            label: const Text('Вийти'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.error,
+              side: BorderSide(color: colorScheme.error),
+            ),
+          ),
+        ),
+        // ▼ Sentry: тестові кнопки, видно лише в режимі розробки
+        if (kDebugMode) ...[
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _sendHandledTestError,
+            child: const Text('Тест Sentry: оброблена помилка'),
+          ),
+          TextButton(
+            onPressed: _throwUnhandledTestError,
+            child: const Text('Тест Sentry: необроблена помилка'),
+          ),
+        ],
+        // ▲ Sentry
+      ],
     );
   }
 

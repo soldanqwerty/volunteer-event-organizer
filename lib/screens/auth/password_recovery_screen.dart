@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
-import '../../data/repositories/auth_repository.dart';
+import '../../state/auth_model.dart';
 
 /// Екран відновлення пароля (макет S-03, вимога FR-03).
 /// Надсилає лист із посиланням для встановлення нового пароля.
@@ -18,26 +18,27 @@ class PasswordRecoveryScreen extends StatefulWidget {
 class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _authRepository = AuthRepository();
+  /// Стан завантаження береться з AuthModel; select перебудовує екран
+  /// лише тоді, коли змінюється саме isLoading. Викликається під час build.
+  bool get _isLoading => context.select<AuthModel, bool>((m) => m.isLoading);
 
-  bool _isLoading = false;
+  // Ефемерний стан екрана: чи вже надіслано лист.
   bool _isSent = false;
 
+  /// FR-03.
   Future<void> _onSendPressed() async {
-    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final auth = context.read<AuthModel>();
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _isLoading = true);
-
-    try {
-      await _authRepository.sendPasswordReset(email: _emailController.text);
-      AnalyticsService.logPasswordResetRequested();
-      if (mounted) setState(() => _isSent = true);
-    } on AuthException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    final ok = await auth.sendPasswordReset(email: _emailController.text);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _isSent = true);
+    } else {
+      messenger.showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Сталася помилка')),
+      );
     }
   }
 

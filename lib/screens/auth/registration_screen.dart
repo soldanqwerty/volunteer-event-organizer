@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
-import '../../data/repositories/auth_repository.dart';
+import '../../state/auth_model.dart';
 
 /// Екран реєстрації (макет S-01, вимога FR-01).
 /// Після успішної реєстрації користувач автоматично входить у систему,
@@ -23,35 +23,27 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authRepository = AuthRepository();
+  /// Стан завантаження береться з AuthModel; select перебудовує екран
+  /// лише тоді, коли змінюється саме isLoading. Викликається під час build.
+  bool get _isLoading => context.select<AuthModel, bool>((m) => m.isLoading);
 
-  bool _isLoading = false;
-
+  /// FR-01. Після реєстрації користувач автоматично входить, AuthModel
+  /// змінює статус, і застосунок сам переходить до основної оболонки.
   Future<void> _onRegisterPressed() async {
-    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final auth = context.read<AuthModel>();
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    setState(() => _isLoading = true);
-
-    try {
-      await _authRepository.signUp(
-        email: _emailController.text,
-        password: _passwordController.text,
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-      );
-      AnalyticsService.logSignUp();
+    final ok = await auth.signUp(
+      email: _emailController.text,
+      password: _passwordController.text,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+    );
+    if (!ok && mounted) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Обліковий запис створено. Вітаємо!')),
+        SnackBar(content: Text(auth.errorMessage ?? 'Не вдалося зареєструватися')),
       );
-      // Закриваємо екран реєстрації: під ним AuthGate уже показує Home.
-      navigator.popUntil((route) => route.isFirst);
-    } on AuthException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 

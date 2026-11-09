@@ -1,32 +1,34 @@
 import 'package:flutter/material.dart';
 
-class EventPreview {
-  final String title;
-  final String date;
-  final String time;
-  final String location;
-  final Color indicatorColor;
+import '../../data/models/volunteer_event.dart';
+import '../utils/date_formatter.dart';
 
-  const EventPreview({
-    required this.title,
-    required this.date,
-    required this.time,
-    required this.location,
-    this.indicatorColor = Colors.green,
-  });
-}
-
+/// Картка заходу для головного екрана та сітки на екрані «Заходи».
 class EventCard extends StatelessWidget {
-  final EventPreview event;
+  final VolunteerEvent event;
+  final VoidCallback? onTap;
 
-  const EventCard({super.key, required this.event});
+  /// Підпис під назвою, наприклад «8/20 учасників» або «Ви організатор».
+  final String? footnote;
+  final double? width;
+
+  const EventCard({
+    super.key,
+    required this.event,
+    this.onTap,
+    this.footnote,
+    this.width = 220,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final card = Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -36,17 +38,32 @@ class EventCard extends StatelessWidget {
                 Container(
                   height: 100,
                   width: double.infinity,
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Icon(Icons.image_outlined, size: 32),
+                  color: event.category.color.withValues(alpha: 0.12),
+                  child: Icon(
+                    _categoryIcon(event.category),
+                    size: 36,
+                    color: event.category.color,
+                  ),
                 ),
                 Positioned(
                   top: 8,
                   left: 8,
                   child: CircleAvatar(
                     radius: 6,
-                    backgroundColor: event.indicatorColor,
+                    backgroundColor: event.category.color,
                   ),
                 ),
+                if (event.isPast)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Chip(
+                      label: const Text('Завершено'),
+                      visualDensity: VisualDensity.compact,
+                      labelStyle: textTheme.labelSmall,
+                      side: BorderSide.none,
+                    ),
+                  ),
               ],
             ),
             Padding(
@@ -56,9 +73,9 @@ class EventCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    event.date.toUpperCase(),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
+                    DateFormatter.dayMonth(event.dateTime).toUpperCase(),
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.primary,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
@@ -66,41 +83,69 @@ class EventCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     event.title,
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: textTheme.titleSmall,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        event.time,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                  _IconLine(
+                    icon: Icons.access_time,
+                    text: DateFormatter.time(event.dateTime),
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 14),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          event.location,
-                          style: Theme.of(context).textTheme.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  _IconLine(
+                    icon: Icons.location_on_outlined,
+                    text: event.location,
                   ),
+                  if (footnote != null) ...[
+                    const SizedBox(height: 4),
+                    _IconLine(icon: Icons.group_outlined, text: footnote!),
+                  ],
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+
+    return width == null ? card : SizedBox(width: width, child: card);
+  }
+
+  static IconData _categoryIcon(EventCategory category) {
+    switch (category) {
+      case EventCategory.ecology:
+        return Icons.park_outlined;
+      case EventCategory.social:
+        return Icons.volunteer_activism_outlined;
+      case EventCategory.animals:
+        return Icons.pets_outlined;
+      case EventCategory.education:
+        return Icons.school_outlined;
+    }
+  }
+}
+
+class _IconLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _IconLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 14),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

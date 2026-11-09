@@ -65,4 +65,14 @@ class Validators {
     }
     return null;
   }
+
+  /// Ціле додатне число (ліміт учасників).
+  static String? positiveInt(String? value) {
+    final requiredError = required(value, 'Вкажіть число');
+    if (requiredError != null) return requiredError;
+    final number = int.tryParse(value!.trim());
+    if (number == null || number <= 0) return 'Має бути додатне ціле число';
+    if (number > 1000) return 'Не більше 1000';
+    return null;
+  }
 }

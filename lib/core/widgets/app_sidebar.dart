@@ -81,7 +81,7 @@ class AppSidebar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer.withOpacity(0.4),
+              color: colorScheme.primaryContainer.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -145,7 +145,7 @@ class _SidebarItem extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: selected
-            ? colorScheme.primaryContainer.withOpacity(0.5)
+            ? colorScheme.primaryContainer.withValues(alpha: 0.5)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(

@@ -1,18 +1,21 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
-import '../../core/widgets/app_sidebar.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../data/repositories/auth_repository.dart';
-import '../../data/services/analytics_service.dart';
+import '../../state/auth_model.dart';
+import '../../state/profile_model.dart';
 import 'avatar_picker_dialog.dart';
 
 /// Екран профілю (макет S-11, вимоги FR-04, FR-05, FR-06).
+///
+/// Дані профілю та стани збереження — у ProfileModel (Provider),
+/// вихід — через AuthModel. Контролери полів залишаються ефемерним
+/// станом цього екрана.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,9 +24,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _authRepository = AuthRepository();
-  late final Stream<User?> _userStream = _authRepository.userChanges();
-
   final _profileFormKey = GlobalKey<FormState>();
   final _passwordFormKey = GlobalKey<FormState>();
 
@@ -37,23 +37,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  bool _isSavingProfile = false;
-  bool _isChangingPassword = false;
-  bool _isUpdatingPhoto = false;
-  bool _isLoggingOut = false;
-
   @override
   void initState() {
     super.initState();
     // Поля заповнюються один раз, щоб перебудови екрана не стирали
     // те, що користувач уже почав редагувати.
-    final user = _authRepository.currentUser;
-    final nameParts = (user?.displayName ?? '').trim().split(RegExp(r'\s+'));
-    _firstNameController = TextEditingController(text: nameParts.first);
-    _lastNameController = TextEditingController(
-      text: nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '',
-    );
-    _emailController = TextEditingController(text: user?.email ?? '');
+    final profile = context.read<ProfileModel>();
+    _firstNameController = TextEditingController(text: profile.firstName);
+    _lastNameController = TextEditingController(text: profile.lastName);
+    _emailController = TextEditingController(text: profile.email);
   }
 
   void _showMessage(String message) {
@@ -63,100 +55,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// FR-04. Збереження імені та прізвища.
   Future<void> _onSaveChangesPressed() async {
-    if (_isSavingProfile) return;
     if (!_profileFormKey.currentState!.validate()) return;
 
-    setState(() => _isSavingProfile = true);
-    try {
-      await _authRepository.updateDisplayName(
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-      );
-      AnalyticsService.logProfileUpdated();
-      if (mounted) _showMessage('Профіль оновлено');
-    } on AuthException catch (e) {
-      if (mounted) _showMessage(e.message);
-    } finally {
-      if (mounted) setState(() => _isSavingProfile = false);
-    }
+    final error = await context.read<ProfileModel>().updateName(
+          firstName: _firstNameController.text,
+          lastName: _lastNameController.text,
+        );
+    if (mounted) _showMessage(error ?? 'Профіль оновлено');
   }
 
   /// FR-05. Зміна пароля з повторною автентифікацією.
   Future<void> _onChangePasswordPressed() async {
-    if (_isChangingPassword) return;
     if (!_passwordFormKey.currentState!.validate()) return;
 
-    setState(() => _isChangingPassword = true);
-    try {
-      await _authRepository.changePassword(
-        currentPassword: _currentPasswordController.text,
-        newPassword: _newPasswordController.text,
-      );
-      AnalyticsService.logPasswordChanged();
-      if (!mounted) return;
-      _currentPasswordController.clear();
-      _newPasswordController.clear();
-      _confirmPasswordController.clear();
-      // Прибирає підказки «Введіть пароль» під щойно очищеними полями.
-      _passwordFormKey.currentState!.reset();
-      _showMessage('Пароль успішно змінено');
-    } on AuthException catch (e) {
-      if (mounted) _showMessage(e.message);
-    } finally {
-      if (mounted) setState(() => _isChangingPassword = false);
+    final error = await context.read<ProfileModel>().changePassword(
+          currentPassword: _currentPasswordController.text,
+          newPassword: _newPasswordController.text,
+        );
+    if (!mounted) return;
+    if (error != null) {
+      _showMessage(error);
+      return;
     }
+    _currentPasswordController.clear();
+    _newPasswordController.clear();
+    _confirmPasswordController.clear();
+    // Прибирає підказки «Введіть пароль» під щойно очищеними полями.
+    _passwordFormKey.currentState!.reset();
+    _showMessage('Пароль успішно змінено');
   }
 
   /// FR-06. Вибір фото профілю з готових або за власним посиланням.
-  Future<void> _onChangePhotoPressed(User? user) async {
-    if (_isUpdatingPhoto) return;
+  Future<void> _onChangePhotoPressed(ProfileModel profile) async {
+    if (profile.isUpdatingPhoto) return;
 
     final choice = await showDialog<AvatarChoice>(
       context: context,
       builder: (_) => AvatarPickerDialog(
-        currentUrl: user?.photoURL,
-        initials: UserAvatar.initialsFrom(user?.displayName),
+        currentUrl: profile.photoUrl,
+        initials: UserAvatar.initialsFrom(profile.displayName),
       ),
     );
     if (choice == null || !mounted) return;
 
-    setState(() => _isUpdatingPhoto = true);
-    try {
-      await _authRepository.updatePhotoUrl(choice.url);
-      AnalyticsService.logAvatarChanged(
-        source: choice.url == null
-            ? 'removed'
-            : choice.url!.contains('dicebear')
-            ? 'preset'
-            : 'custom',
+    final error = await profile.updatePhoto(choice.url);
+    if (mounted) {
+      _showMessage(
+        error ?? (choice.url == null ? 'Фото видалено' : 'Фото оновлено'),
       );
-      if (mounted) {
-        _showMessage(choice.url == null ? 'Фото видалено' : 'Фото оновлено');
-      }
-    } on AuthException catch (e) {
-      if (mounted) _showMessage(e.message);
-    } finally {
-      if (mounted) setState(() => _isUpdatingPhoto = false);
     }
   }
 
-  /// FR-04. Вихід: AuthGate сам покаже екран входу.
+  /// FR-04. Вихід: AuthGate сам покаже екран входу, а SessionScope
+  /// звільнить стан заходів і завдань.
   Future<void> _onLogoutPressed() async {
-    if (_isLoggingOut) return;
-
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _isLoggingOut = true);
-
-    try {
-      await _authRepository.signOut();
-      navigator.popUntil((route) => route.isFirst);
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Ви вийшли з облікового запису')),
-      );
-    } on AuthException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-      if (mounted) setState(() => _isLoggingOut = false);
+    final auth = context.read<AuthModel>();
+    final ok = await auth.signOut();
+    if (!ok && mounted) {
+      _showMessage(auth.errorMessage ?? 'Не вдалося вийти');
     }
   }
 
@@ -181,19 +137,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ▲ Sentry
 
-  void _onNavDestinationSelected(int index) {
-    switch (index) {
-      case 0:
-        // Профіль відкрито поверх головної — просто закриваємо його.
-        Navigator.of(context).pop();
-        break;
-      case 3:
-        break;
-      default:
-        _showMessage('Цей розділ буде додано пізніше');
-    }
-  }
-
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -208,54 +151,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: _userStream,
-      initialData: _authRepository.currentUser,
-      builder: (context, snapshot) {
-        final user = snapshot.data;
-        return Scaffold(
-          body: Row(
+    // watch: екран оновлюється після зміни імені, фото чи стану
+    // збереження в ProfileModel.
+    final profile = context.watch<ProfileModel>();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(context),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppSidebar(
-                selectedIndex: 3,
-                onDestinationSelected: _onNavDestinationSelected,
+              SizedBox(
+                width: 260,
+                child: _buildSummaryCard(context, profile),
               ),
-              const VerticalDivider(width: 1),
+              const SizedBox(width: 24),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(context),
-                      const SizedBox(height: 24),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 260,
-                            child: _buildSummaryCard(context, user),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _buildPersonalDataCard(context),
-                                const SizedBox(height: 16),
-                                _buildPasswordCard(context),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                child: Column(
+                  children: [
+                    _buildPersonalDataCard(context, profile),
+                    const SizedBox(height: 16),
+                    _buildPasswordCard(context, profile),
+                  ],
                 ),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -278,10 +205,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context, User? user) {
+  Widget _buildSummaryCard(BuildContext context, ProfileModel profile) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final displayName = (user?.displayName ?? '').trim();
+    final displayName = profile.displayName;
+    final isLoggingOut = context.select<AuthModel, bool>((m) => m.isLoading);
 
     return Card(
       child: Padding(
@@ -292,8 +220,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               alignment: Alignment.bottomRight,
               children: [
                 UserAvatar(
-                  photoUrl: user?.photoURL,
-                  initials: UserAvatar.initialsFrom(user?.displayName),
+                  photoUrl: profile.photoUrl,
+                  initials: UserAvatar.initialsFrom(profile.displayName),
                   radius: 40,
                 ),
                 Container(
@@ -302,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: colorScheme.surface, width: 2),
                   ),
-                  child: _isUpdatingPhoto
+                  child: profile.isUpdatingPhoto
                       ? Padding(
                           padding: const EdgeInsets.all(6),
                           child: SizedBox(
@@ -318,7 +246,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           tooltip: 'Змінити фото',
                           icon: const Icon(Icons.camera_alt, size: 14),
                           color: colorScheme.onPrimary,
-                          onPressed: () => _onChangePhotoPressed(user),
+                          onPressed: () => _onChangePhotoPressed(profile),
                           constraints: const BoxConstraints(
                             minWidth: 28,
                             minHeight: 28,
@@ -335,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               textAlign: TextAlign.center,
             ),
             Text(
-              user?.email ?? '',
+              profile.email,
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -347,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withOpacity(0.4),
+                color: colorScheme.primaryContainer.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -378,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _isLoggingOut ? null : _onLogoutPressed,
+                onPressed: isLoggingOut ? null : _onLogoutPressed,
                 icon: const Icon(Icons.logout),
                 label: const Text('Вийти'),
                 style: OutlinedButton.styleFrom(
@@ -406,7 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPersonalDataCard(BuildContext context) {
+  Widget _buildPersonalDataCard(BuildContext context, ProfileModel profile) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -424,7 +352,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: AppTextField(
                       label: "Ім'я",
                       controller: _firstNameController,
-                      enabled: !_isSavingProfile,
+                      enabled: !profile.isSavingName,
                       validator: (value) =>
                           Validators.name(value, emptyMessage: "Введіть ім'я"),
                     ),
@@ -434,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: AppTextField(
                       label: 'Прізвище',
                       controller: _lastNameController,
-                      enabled: !_isSavingProfile,
+                      enabled: !profile.isSavingName,
                       validator: (value) => Validators.name(
                         value,
                         emptyMessage: 'Введіть прізвище',
@@ -470,7 +398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 200,
                   child: AppPrimaryButton(
                     label: 'Зберегти зміни',
-                    isLoading: _isSavingProfile,
+                    isLoading: profile.isSavingName,
                     onPressed: _onSaveChangesPressed,
                   ),
                 ),
@@ -482,7 +410,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPasswordCard(BuildContext context) {
+  Widget _buildPasswordCard(BuildContext context, ProfileModel profile) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -497,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'Поточний пароль',
                 controller: _currentPasswordController,
                 obscureText: true,
-                enabled: !_isChangingPassword,
+                enabled: !profile.isChangingPassword,
                 autofillHints: const [AutofillHints.password],
                 validator: Validators.loginPassword,
               ),
@@ -510,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Новий пароль',
                       controller: _newPasswordController,
                       obscureText: true,
-                      enabled: !_isChangingPassword,
+                      enabled: !profile.isChangingPassword,
                       autofillHints: const [AutofillHints.newPassword],
                       validator: (value) {
                         final error = Validators.newPassword(value);
@@ -528,7 +456,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Підтвердження',
                       controller: _confirmPasswordController,
                       obscureText: true,
-                      enabled: !_isChangingPassword,
+                      enabled: !profile.isChangingPassword,
                       validator: (value) => Validators.confirmPassword(
                         value,
                         _newPasswordController.text,
@@ -545,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 160,
                   child: AppPrimaryButton(
                     label: 'Змінити',
-                    isLoading: _isChangingPassword,
+                    isLoading: profile.isChangingPassword,
                     onPressed: _onChangePasswordPressed,
                   ),
                 ),

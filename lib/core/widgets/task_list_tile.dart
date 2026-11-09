@@ -1,86 +1,124 @@
 import 'package:flutter/material.dart';
 
-enum TaskPriority { low, medium, high }
+import '../../data/models/event_task.dart';
+import '../utils/date_formatter.dart';
 
-enum TaskStatus { newTask, inProgress, done }
-
-class TaskPreview {
-  final String title;
-  final String dueDate;
-  final TaskPriority priority;
-  final TaskStatus status;
-
-  const TaskPreview({
-    required this.title,
-    required this.dueDate,
-    required this.priority,
-    required this.status,
-  });
-}
-
+/// Рядок завдання: пріоритет (кольорова крапка), назва, термін,
+/// виконавець і статус.
 class TaskListTile extends StatelessWidget {
-  final TaskPreview task;
+  final EventTask task;
+  final VoidCallback? onTap;
 
-  const TaskListTile({super.key, required this.task});
+  /// Додатковий рядок, наприклад назва заходу на екрані «Мої завдання».
+  final String? subtitle;
+  final bool showAssignee;
 
-  Color _priorityColor() {
-    switch (task.priority) {
-      case TaskPriority.high:
-        return Colors.red;
-      case TaskPriority.medium:
-        return Colors.orange;
-      case TaskPriority.low:
-        return Colors.green;
-    }
-  }
+  /// Якщо задано, статус можна змінити через випадне меню.
+  final ValueChanged<TaskStatus>? onStatusChanged;
+  final Widget? trailingAction;
 
-  Color _statusColor(BuildContext context) {
-    switch (task.status) {
-      case TaskStatus.newTask:
-        return Colors.green;
-      case TaskStatus.inProgress:
-        return Colors.blue;
-      case TaskStatus.done:
-        return Theme.of(context).colorScheme.outline;
-    }
-  }
-
-  String _statusLabel() {
-    switch (task.status) {
-      case TaskStatus.newTask:
-        return 'Нове';
-      case TaskStatus.inProgress:
-        return 'У роботі';
-      case TaskStatus.done:
-        return 'Виконано';
-    }
-  }
+  const TaskListTile({
+    super.key,
+    required this.task,
+    this.onTap,
+    this.subtitle,
+    this.showAssignee = false,
+    this.onStatusChanged,
+    this.trailingAction,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _statusColor(context);
+    final textTheme = Theme.of(context).textTheme;
+    final isOverdue =
+        task.status != TaskStatus.done && task.dueDate.isBefore(DateTime.now());
+
+    final details = <String>[
+      DateFormatter.relativeDay(task.dueDate),
+      if (subtitle != null) subtitle!,
+      if (showAssignee) task.assigneeName ?? 'Не призначено',
+    ];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(radius: 6, backgroundColor: _priorityColor()),
-        title: Text(task.title),
+        onTap: onTap,
+        leading: Tooltip(
+          message: 'Пріоритет: ${task.priority.label}',
+          child: CircleAvatar(radius: 6, backgroundColor: task.priority.color),
+        ),
+        title: Text(
+          task.title,
+          style: task.status == TaskStatus.done
+              ? const TextStyle(decoration: TextDecoration.lineThrough)
+              : null,
+        ),
         subtitle: Row(
           children: [
-            const Icon(Icons.calendar_today, size: 12),
+            Icon(
+              Icons.calendar_today,
+              size: 12,
+              color: isOverdue ? Colors.red : null,
+            ),
             const SizedBox(width: 4),
-            Text(task.dueDate),
+            Expanded(
+              child: Text(
+                details.join('  •  '),
+                overflow: TextOverflow.ellipsis,
+                style: isOverdue
+                    ? textTheme.bodySmall?.copyWith(color: Colors.red)
+                    : null,
+              ),
+            ),
           ],
         ),
-        trailing: Chip(
-          label: Text(
-            _statusLabel(),
-            style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
-          ),
-          backgroundColor: statusColor.withOpacity(0.12),
-          side: BorderSide.none,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _StatusChip(task: task, onChanged: onStatusChanged),
+            if (trailingAction != null) trailingAction!,
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final EventTask task;
+  final ValueChanged<TaskStatus>? onChanged;
+
+  const _StatusChip({required this.task, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = task.status.color;
+    final chip = Chip(
+      label: Text(
+        task.status.label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
+      avatar: onChanged == null
+          ? null
+          : Icon(Icons.arrow_drop_down, color: color, size: 18),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide.none,
+    );
+
+    if (onChanged == null) return chip;
+
+    return PopupMenuButton<TaskStatus>(
+      tooltip: 'Змінити статус',
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final status in TaskStatus.values)
+          CheckedPopupMenuItem(
+            value: status,
+            checked: status == task.status,
+            child: Text(status.label),
+          ),
+      ],
+      child: chip,
     );
   }
 }

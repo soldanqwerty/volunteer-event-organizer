@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/services/analytics_service.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_primary_button.dart';
 import '../../core/widgets/app_text_field.dart';
-import '../../data/repositories/auth_repository.dart';
+import '../../state/auth_model.dart';
 import 'password_recovery_screen.dart';
 import 'registration_screen.dart';
 
@@ -21,30 +21,21 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authRepository = AuthRepository();
-
-  bool _isLoading = false;
-
+  /// FR-02. Після успішного входу AuthModel змінює статус, і AuthGate
+  /// сам показує основну оболонку — переходити вручну не потрібно.
   Future<void> _onLoginPressed() async {
-    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final auth = context.read<AuthModel>();
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _isLoading = true);
-
-    try {
-      await _authRepository.signIn(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-      AnalyticsService.logLogin();
+    final ok = await auth.signIn(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+    if (!ok && mounted) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Вхід виконано успішно')),
+        SnackBar(content: Text(auth.errorMessage ?? 'Не вдалося увійти')),
       );
-    } on AuthException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -61,6 +52,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Кнопка й поля блокуються, поки AuthModel виконує вхід.
+    final isLoading = context.select<AuthModel, bool>((m) => m.isLoading);
+
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -84,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
-                      enabled: !_isLoading,
+                      enabled: !isLoading,
                       validator: Validators.email,
                     ),
                     const SizedBox(height: 16),
@@ -94,26 +88,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       obscureText: true,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.password],
-                      enabled: !_isLoading,
+                      enabled: !isLoading,
                       validator: Validators.loginPassword,
                       onFieldSubmitted: (_) => _onLoginPressed(),
                     ),
                     const SizedBox(height: 24),
                     AppPrimaryButton(
                       label: 'Увійти',
-                      isLoading: _isLoading,
+                      isLoading: isLoading,
                       onPressed: _onLoginPressed,
                     ),
                     const SizedBox(height: 16),
                     TextButton(
-                      onPressed: _isLoading
+                      onPressed: isLoading
                           ? null
                           : () => _openScreen(const PasswordRecoveryScreen()),
                       child: const Text('Забули пароль?'),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: _isLoading
+                      onPressed: isLoading
                           ? null
                           : () => _openScreen(const RegistrationScreen()),
                       child: const Text('Немає акаунту? Зареєструватися'),

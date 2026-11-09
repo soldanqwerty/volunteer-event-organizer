@@ -1,33 +1,30 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/repositories/auth_repository.dart';
-import '../home/home_screen.dart';
+import '../../state/auth_model.dart';
+import '../shell/app_shell.dart';
 import 'login_screen.dart';
 
-/// Кореневий віджет: показує вхід або головний екран залежно від стану
-/// автентифікації. Завдяки цьому сеанс відновлюється після оновлення сторінки.
+/// Кореневий екран: показує вхід або основну оболонку залежно від
+/// стану [AuthModel]. Сеанс відновлюється після оновлення сторінки,
+/// бо Firebase Auth зберігає його сам.
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: AuthRepository().authStateChanges(),
-      builder: (context, snapshot) {
+    final status = context.select<AuthModel, AuthStatus>((m) => m.status);
+
+    switch (status) {
+      case AuthStatus.unknown:
         // Firebase ще перевіряє збережений сеанс.
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.hasData) {
-          return const HomeScreen();
-        }
-
+        return const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        );
+      case AuthStatus.authenticated:
+        return const AppShell();
+      case AuthStatus.unauthenticated:
         return const LoginScreen();
-      },
-    );
+    }
   }
 }

@@ -38,6 +38,8 @@ dependencies:
   firebase_auth: ^7.0.1
   firebase_analytics: ^13.0.1
   sentry_flutter: ^10.2.0
+  provider: ^6.1.5
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

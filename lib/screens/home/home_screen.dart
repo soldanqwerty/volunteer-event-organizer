@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/utils/date_formatter.dart';
 import '../../core/widgets/app_sidebar.dart';
 import '../../core/widgets/event_card.dart';
 import '../../core/widgets/task_list_tile.dart';
@@ -125,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             Text(
-                              "П'ятниця, 23 травня",
+                              DateFormatter.weekdayDayMonth(DateTime.now()),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],

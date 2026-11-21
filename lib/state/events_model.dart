@@ -37,9 +37,10 @@ class EventsModel extends ChangeNotifier {
     required this._preferences,
     this._storage,
     required this.currentUserId,
-    required this.currentUserName,
+    required String currentUserName,
+    this._resolveUserName,
     required this.currentUserEmail,
-  });
+  }) : _initialUserName = currentUserName;
 
   final EventRepository _repository;
   final PreferencesService _preferences;
@@ -47,7 +48,14 @@ class EventsModel extends ChangeNotifier {
   /// Хмарне сховище для обкладинок (лаб. №6). null — у тестах.
   final StorageRepository? _storage;
   final String currentUserId;
-  final String currentUserName;
+  final String _initialUserName;
+
+  /// Повертає актуальне ім'я користувача в момент дії. Потрібно, бо
+  /// одразу після реєстрації Firebase зберігає ім'я трохи пізніше, ніж
+  /// створюється ця модель.
+  final String Function()? _resolveUserName;
+
+  String get currentUserName => _resolveUserName?.call() ?? _initialUserName;
   final String currentUserEmail;
 
   List<VolunteerEvent> _events = [];

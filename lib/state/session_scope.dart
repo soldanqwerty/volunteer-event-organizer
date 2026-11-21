@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
@@ -20,10 +21,9 @@ class SessionScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.read<AuthModel>().user!;
-    final name = (user.displayName ?? '').trim().isEmpty
-        ? (user.email ?? 'Волонтер')
-        : user.displayName!.trim();
+    final auth = context.read<AuthModel>();
+    final user = auth.user!;
+    final name = _displayName(user);
 
     return MultiProvider(
       providers: [
@@ -38,6 +38,8 @@ class SessionScope extends StatelessWidget {
             storage: context.read<StorageRepository>(),
             currentUserId: user.uid,
             currentUserName: name,
+            // Ім'я читається щоразу заново (див. EventsModel).
+            resolveUserName: () => _displayName(auth.user ?? user),
             currentUserEmail: user.email ?? '',
           )..load(),
         ),
@@ -51,5 +53,10 @@ class SessionScope extends StatelessWidget {
       ],
       child: child,
     );
+  }
+
+  static String _displayName(User user) {
+    final name = (user.displayName ?? '').trim();
+    return name.isEmpty ? (user.email ?? 'Волонтер') : name;
   }
 }

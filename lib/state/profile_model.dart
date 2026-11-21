@@ -54,9 +54,24 @@ class ProfileModel extends ChangeNotifier {
     return parts.length > 1 ? parts.sublist(1).join(' ') : '';
   }
 
+  /// FR-04. Телефон зберігається лише в Firestore (у Firebase Auth для
+  /// нього немає поля без SMS-підтвердження).
+  Future<String> loadPhone() async {
+    final uid = _user?.uid;
+    if (uid == null || _users == null) return '';
+    try {
+      return await _users.fetchPhone(uid) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// FR-04. Ім'я та прізвище — у Firebase Auth і Firestore, телефон —
+  /// у документі `users/{uid}`.
   Future<String?> updateName({
     required String firstName,
     required String lastName,
+    String? phone,
   }) async {
     if (_isSavingName) return null;
     _isSavingName = true;
@@ -71,6 +86,7 @@ class ProfileModel extends ChangeNotifier {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email,
+        phone: phone?.trim(),
       );
       AnalyticsService.logProfileUpdated();
       return null;

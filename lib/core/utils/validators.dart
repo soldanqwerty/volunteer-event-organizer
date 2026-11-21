@@ -66,6 +66,19 @@ class Validators {
     return null;
   }
 
+  /// Необов'язковий номер телефону: цифри, пробіли, дужки, дефіс і «+»
+  /// на початку, від 10 до 13 цифр (FR-04).
+  static String? phone(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    if (!RegExp(r'^\+?[0-9\s()-]+$').hasMatch(text)) {
+      return 'Номер може містити лише цифри, пробіли, дужки та «+»';
+    }
+    final digits = text.replaceAll(RegExp(r'\D'), '').length;
+    if (digits < 10 || digits > 13) return 'Перевірте кількість цифр у номері';
+    return null;
+  }
+
   /// Ціле додатне число (ліміт учасників).
   static String? positiveInt(String? value) {
     final requiredError = required(value, 'Вкажіть число');

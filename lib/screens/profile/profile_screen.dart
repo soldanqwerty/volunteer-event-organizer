@@ -46,6 +46,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _firstNameController = TextEditingController(text: profile.firstName);
     _lastNameController = TextEditingController(text: profile.lastName);
     _emailController = TextEditingController(text: profile.email);
+    // Телефон зберігається у Firestore, тому підвантажується окремо.
+    profile.loadPhone().then((phone) {
+      if (mounted && _phoneController.text.isEmpty) {
+        _phoneController.text = phone;
+      }
+    });
   }
 
   void _showMessage(String message) {
@@ -53,13 +59,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// FR-04. Збереження імені та прізвища.
+  /// FR-04. Збереження імені, прізвища та телефону.
   Future<void> _onSaveChangesPressed() async {
     if (!_profileFormKey.currentState!.validate()) return;
 
     final error = await context.read<ProfileModel>().updateName(
           firstName: _firstNameController.text,
           lastName: _lastNameController.text,
+          phone: _phoneController.text,
         );
     if (mounted) _showMessage(error ?? 'Профіль оновлено');
   }
@@ -383,9 +390,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   Expanded(
                     child: AppTextField(
-                      label: 'Телефон (буде додано пізніше)',
+                      label: 'Телефон',
                       controller: _phoneController,
-                      enabled: false,
+                      enabled: !profile.isSavingName,
+                      keyboardType: TextInputType.phone,
+                      hintText: '+380 67 123 45 67',
+                      validator: Validators.phone,
                     ),
                   ),
                   const SizedBox(width: 16),

@@ -37,7 +37,7 @@ Future<void> main() async {
       // Supabase використовується лише як файлове сховище (лаб. №6).
       await Supabase.initialize(
         url: SupabaseConfig.url,
-        anonKey: SupabaseConfig.anonKey,
+        publishableKey: SupabaseConfig.publishableKey,
       );
       runApp(
         // Глобальні залежності та стан, що живуть увесь час роботи

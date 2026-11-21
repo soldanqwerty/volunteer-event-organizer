@@ -5,15 +5,17 @@ import '../../data/repositories/storage_repository.dart';
 /// Відкриває стандартне вікно вибору файлу та повертає зображення
 /// (FR-06, FR-08). null — користувач нічого не обрав.
 Future<PickedImage?> pickImageFile() async {
-  final result = await FilePicker.platform.pickFiles(
+  // file_picker 13: статичний метод pickFile() для одного файлу.
+  final file = await FilePicker.pickFile(
     type: FileType.custom,
     allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
-    withData: true, // на вебі файл доступний лише як байти
   );
-  final file = result?.files.singleOrNull;
-  if (file == null || file.bytes == null) return null;
+  if (file == null) return null;
 
-  final extension = (file.extension ?? '').toLowerCase();
+  final bytes = await file.readAsBytes();
+  final name = file.name;
+  final extension =
+      name.contains('.') ? name.split('.').last.toLowerCase() : '';
   final contentType = switch (extension) {
     'png' => 'image/png',
     'webp' => 'image/webp',
@@ -21,9 +23,5 @@ Future<PickedImage?> pickImageFile() async {
     _ => 'application/octet-stream',
   };
 
-  return PickedImage(
-    bytes: file.bytes!,
-    name: file.name,
-    contentType: contentType,
-  );
+  return PickedImage(bytes: bytes, name: name, contentType: contentType);
 }

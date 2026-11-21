@@ -48,14 +48,21 @@ service cloud.firestore {
       }
 
       // Завдання: створює, редагує й видаляє організатор; виконавець
-      // може змінити лише статус свого завдання (FR-14 – FR-17).
+      // може змінити статус свого завдання (FR-16) або зняти себе з нього,
+      // коли скасовує участь у заході (FR-12).
       match /tasks/{taskId} {
         allow create, delete: if signedIn() && isOrganizer(eventId);
         allow update: if signedIn() && (
           isOrganizer(eventId) || (
-            resource.data.assigneeId == request.auth.uid
-            && request.resource.data.diff(resource.data)
-                 .affectedKeys().hasOnly(['status'])
+            resource.data.assigneeId == request.auth.uid && (
+              request.resource.data.diff(resource.data)
+                .affectedKeys().hasOnly(['status'])
+              || (
+                request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['assigneeId', 'assigneeName'])
+                && request.resource.data.assigneeId == null
+              )
+            )
           )
         );
       }

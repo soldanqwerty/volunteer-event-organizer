@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 /// Категорія заходу. Від неї залежить колір позначки на картці.
@@ -38,6 +39,9 @@ class VolunteerEvent {
   final String organizerId;
   final String organizerName;
 
+  /// Посилання на обкладинку в Supabase Storage (необов'язкова, FR-08).
+  final String? coverUrl;
+
   const VolunteerEvent({
     required this.id,
     required this.title,
@@ -49,7 +53,44 @@ class VolunteerEvent {
     required this.participantLimit,
     required this.organizerId,
     required this.organizerName,
+    this.coverUrl,
   });
+
+  /// Документ колекції `events` → об'єкт. Дати в Firestore зберігаються
+  /// як Timestamp, категорія — як назва значення enum.
+  factory VolunteerEvent.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    return VolunteerEvent(
+      id: doc.id,
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      category: EventCategory.values.asNameMap()[data['category']] ??
+          EventCategory.social,
+      dateTime: (data['startAt'] as Timestamp).toDate(),
+      endDateTime: (data['endAt'] as Timestamp).toDate(),
+      location: data['location'] as String? ?? '',
+      participantLimit: (data['participantLimit'] as num?)?.toInt() ?? 0,
+      organizerId: data['organizerId'] as String? ?? '',
+      organizerName: data['organizerName'] as String? ?? '',
+      coverUrl: data['coverUrl'] as String?,
+    );
+  }
+
+  /// Об'єкт → поля документа (id не зберігається: це ім'я документа).
+  Map<String, dynamic> toFirestore() => {
+        'title': title,
+        'description': description,
+        'category': category.name,
+        'startAt': Timestamp.fromDate(dateTime),
+        'endAt': Timestamp.fromDate(endDateTime),
+        'location': location,
+        'participantLimit': participantLimit,
+        'organizerId': organizerId,
+        'organizerName': organizerName,
+        'coverUrl': coverUrl,
+      };
 
   bool isOrganizedBy(String? userId) => userId != null && userId == organizerId;
 
@@ -63,6 +104,8 @@ class VolunteerEvent {
     DateTime? endDateTime,
     String? location,
     int? participantLimit,
+    String? coverUrl,
+    bool clearCover = false,
   }) {
     return VolunteerEvent(
       id: id,
@@ -75,6 +118,7 @@ class VolunteerEvent {
       participantLimit: participantLimit ?? this.participantLimit,
       organizerId: organizerId,
       organizerName: organizerName,
+      coverUrl: clearCover ? null : (coverUrl ?? this.coverUrl),
     );
   }
 }

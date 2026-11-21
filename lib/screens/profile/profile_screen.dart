@@ -98,11 +98,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (choice == null || !mounted) return;
 
-    final error = await profile.updatePhoto(choice.url);
+    final file = choice.file;
+    final error = file != null
+        ? await profile.uploadPhoto(file) // у Supabase Storage
+        : await profile.updatePhoto(choice.url);
     if (mounted) {
-      _showMessage(
-        error ?? (choice.url == null ? 'Фото видалено' : 'Фото оновлено'),
-      );
+      final removed = file == null && choice.url == null;
+      _showMessage(error ?? (removed ? 'Фото видалено' : 'Фото оновлено'));
     }
   }
 

@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/storage_repository.dart';
+import '../data/repositories/user_repository.dart';
 import '../data/services/analytics_service.dart';
 
 /// Стан профілю: завантаження даних користувача та їх редагування
@@ -13,7 +15,8 @@ import '../data/services/analytics_service.dart';
 /// три незалежні кнопки: «Зберегти зміни», «Змінити пароль» і фото.
 /// Методи повертають null при успіху або текст помилки.
 class ProfileModel extends ChangeNotifier {
-  ProfileModel(this._repository) : _user = _repository.currentUser {
+  ProfileModel(this._repository, {this._users, this._storage})
+      : _user = _repository.currentUser {
     _subscription = _repository.userChanges().listen((user) {
       _user = user;
       notifyListeners();
@@ -21,6 +24,10 @@ class ProfileModel extends ChangeNotifier {
   }
 
   final AuthRepository _repository;
+
+  /// Профіль у Firestore (`users/{uid}`) і хмарне сховище фото (лаб. №6).
+  final UserRepository? _users;
+  final StorageRepository? _storage;
   late final StreamSubscription<User?> _subscription;
 
   User? _user;
@@ -59,6 +66,12 @@ class ProfileModel extends ChangeNotifier {
         firstName: firstName,
         lastName: lastName,
       );
+      await _users?.saveProfile(
+        uid: _user!.uid,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email,
+      );
       AnalyticsService.logProfileUpdated();
       return null;
     } on AuthException catch (e) {
@@ -91,23 +104,51 @@ class ProfileModel extends ChangeNotifier {
     }
   }
 
-  /// [url] == null — видалити фото.
-  Future<String?> updatePhoto(String? url) async {
+  /// FR-06. Готова аватарка за посиланням; [url] == null — видалити фото.
+  Future<String?> updatePhoto(String? url) => _changePhoto(
+        () async => url,
+        source: url == null ? 'removed' : 'preset',
+      );
+
+  /// FR-06. Фото з пристрою: файл завантажується в Supabase Storage, а
+  /// посилання зберігається у Firebase Auth і в документі `users/{uid}`.
+  Future<String?> uploadPhoto(PickedImage image) => _changePhoto(
+        () async {
+          final storage = _storage;
+          if (storage == null) throw const StorageException('Сховище недоступне');
+          return storage.uploadImage(image, folder: 'avatars/${_user!.uid}');
+        },
+        source: 'upload',
+      );
+
+  Future<String?> _changePhoto(
+    Future<String?> Function() resolveUrl, {
+    required String source,
+  }) async {
     if (_isUpdatingPhoto) return null;
     _isUpdatingPhoto = true;
     notifyListeners();
+    final oldUrl = photoUrl;
     try {
+      final url = await resolveUrl();
       await _repository.updatePhotoUrl(url);
-      AnalyticsService.logAvatarChanged(
-        source: url == null
-            ? 'removed'
-            : url.contains('dicebear')
-                ? 'preset'
-                : 'custom',
+      await _users?.saveProfile(
+        uid: _user!.uid,
+        photoUrl: url,
+        clearPhoto: url == null,
       );
+      // Попередній файл із нашого сховища більше не потрібен.
+      if (oldUrl != null && oldUrl != url) {
+        await _storage?.deleteByUrl(oldUrl);
+      }
+      AnalyticsService.logAvatarChanged(source: source);
       return null;
+    } on StorageException catch (e) {
+      return e.message;
     } on AuthException catch (e) {
       return e.message;
+    } catch (_) {
+      return 'Не вдалося оновити фото';
     } finally {
       _isUpdatingPhoto = false;
       notifyListeners();

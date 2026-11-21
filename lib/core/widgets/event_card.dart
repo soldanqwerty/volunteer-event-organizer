@@ -29,6 +29,7 @@ class EventCompactCard extends StatelessWidget {
               width: 92,
               child: EventCover(
                 category: event.category,
+                imageUrl: event.coverUrl,
                 iconSize: 32,
                 topLeft: Container(
                   width: 10,
@@ -117,6 +118,7 @@ class EventListCard extends StatelessWidget {
               width: 150,
               child: EventCover(
                 category: event.category,
+                imageUrl: event.coverUrl,
                 topLeft: StatusPill(
                   label: event.category.label,
                   color: event.category.color,

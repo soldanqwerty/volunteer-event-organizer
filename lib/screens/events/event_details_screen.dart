@@ -150,6 +150,7 @@ class _EventInfoCard extends StatelessWidget {
                 height: 170,
                 child: EventCover(
                   category: event.category,
+                  imageUrl: event.coverUrl,
                   iconSize: 64,
                   topLeft: StatusPill(
                     label: event.category.label,
@@ -746,7 +747,7 @@ class _TasksTab extends StatelessWidget {
             'Термін: ${DateFormatter.dayMonth(task.dueDate)}'),
       ],
     );
-    if (confirmed) await tasks.deleteTask(task.id);
+    if (confirmed) await tasks.deleteTask(task);
   }
 
   @override

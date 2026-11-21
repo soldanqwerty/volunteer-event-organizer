@@ -1,0 +1,73 @@
+rules_version = '2';
+
+// Правила доступу Cloud Firestore для VolunteerHub (лаб. №6).
+// Ці самі правила вставляються у Firebase Console → Firestore → Rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOrganizer(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId))
+        .data.organizerId == request.auth.uid;
+    }
+
+    // Профіль: читають усі користувачі, змінює лише власник.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // Захід: переглядають усі, хто увійшов; створює користувач як
+    // організатор; редагує й видаляє лише організатор (FR-08, FR-10, FR-11).
+    match /events/{eventId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.organizerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.participantLimit > 0;
+      allow update: if signedIn()
+        && resource.data.organizerId == request.auth.uid
+        && request.resource.data.organizerId == resource.data.organizerId;
+      allow delete: if signedIn() && resource.data.organizerId == request.auth.uid;
+
+      // Заявка учасника (документ = uid): волонтер записується сам зі
+      // статусом «Очікує» і може скасувати участь; статус змінює
+      // організатор (FR-12, FR-13).
+      match /participants/{uid} {
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.userId == uid
+          && request.resource.data.status == 'pending';
+        allow update: if signedIn() && isOrganizer(eventId);
+        allow delete: if signedIn()
+          && (request.auth.uid == uid || isOrganizer(eventId));
+      }
+
+      // Завдання: створює, редагує й видаляє організатор; виконавець
+      // може змінити лише статус свого завдання (FR-14 – FR-17).
+      match /tasks/{taskId} {
+        allow create, delete: if signedIn() && isOrganizer(eventId);
+        allow update: if signedIn() && (
+          isOrganizer(eventId) || (
+            resource.data.assigneeId == request.auth.uid
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status'])
+          )
+        );
+      }
+    }
+
+    // Читання учасників і завдань усіх заходів одним запитом
+    // (collectionGroup) для списків, лічильників і «Моїх завдань».
+    match /{path=**}/participants/{uid} {
+      allow read: if signedIn();
+    }
+    match /{path=**}/tasks/{taskId} {
+      allow read: if signedIn();
+    }
+  }
+}

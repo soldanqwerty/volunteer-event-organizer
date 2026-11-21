@@ -5,9 +5,10 @@ import '../models/volunteer_event.dart';
 
 /// Контракт доступу до заходів, учасників і завдань.
 ///
-/// Провайдери працюють з інтерфейсом, а не з реалізацією. У наступних
-/// лабораторних [InMemoryEventRepository] буде замінено на реалізацію
-/// з Cloud Firestore — без змін у провайдерах і екранах.
+/// Моделі стану працюють з інтерфейсом, а не з реалізацією. У застосунку
+/// використовується [FirestoreEventRepository] (лаб. №6), а
+/// [InMemoryEventRepository] з тестовими даними лишився для unit-тестів.
+/// Заміна реалізації не потребує змін у моделях і екранах.
 abstract interface class EventRepository {
   Future<List<VolunteerEvent>> fetchEvents();
   Future<VolunteerEvent> createEvent(VolunteerEvent draft);
@@ -17,16 +18,16 @@ abstract interface class EventRepository {
   Future<List<Participant>> fetchParticipants();
   Future<Participant> addParticipant(Participant participant);
   Future<Participant> updateParticipant(Participant participant);
-  Future<void> removeParticipant(String participantId);
+  Future<void> removeParticipant(Participant participant);
 
   Future<List<EventTask>> fetchTasks();
   Future<EventTask> createTask(EventTask draft);
   Future<EventTask> updateTask(EventTask task);
-  Future<void> deleteTask(String taskId);
+  Future<void> deleteTask(EventTask task);
 }
 
-/// Тимчасова реалізація: дані зберігаються в пам'яті, а затримка
-/// імітує запит до сервера, щоб на екранах було видно стан завантаження.
+/// Реалізація для тестів (лаб. №5): дані зберігаються в пам'яті, а
+/// затримка імітує запит до сервера.
 class InMemoryEventRepository implements EventRepository {
   InMemoryEventRepository({
     required String currentUserId,
@@ -77,6 +78,7 @@ class InMemoryEventRepository implements EventRepository {
       participantLimit: draft.participantLimit,
       organizerId: draft.organizerId,
       organizerName: draft.organizerName,
+      coverUrl: draft.coverUrl,
     );
     _events.add(created);
     return created;
@@ -133,9 +135,9 @@ class InMemoryEventRepository implements EventRepository {
   }
 
   @override
-  Future<void> removeParticipant(String participantId) async {
+  Future<void> removeParticipant(Participant participant) async {
     await Future.delayed(_latency);
-    _participants.removeWhere((p) => p.id == participantId);
+    _participants.removeWhere((p) => p.id == participant.id);
   }
 
   // ------------------------------------------------------------- Завдання
@@ -174,8 +176,8 @@ class InMemoryEventRepository implements EventRepository {
   }
 
   @override
-  Future<void> deleteTask(String taskId) async {
+  Future<void> deleteTask(EventTask task) async {
     await Future.delayed(_latency);
-    _tasks.removeWhere((t) => t.id == taskId);
+    _tasks.removeWhere((t) => t.id == task.id);
   }
 }

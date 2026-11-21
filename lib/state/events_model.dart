@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../data/models/participant.dart';
 import '../data/models/volunteer_event.dart';
 import '../data/repositories/event_repository.dart';
+import '../data/repositories/storage_repository.dart';
 import '../data/services/preferences_service.dart';
 
 /// Фільтр за датою на екрані «Заходи». Згідно зі специфікацією лаб. №2,
@@ -34,6 +35,7 @@ class EventsModel extends ChangeNotifier {
   EventsModel({
     required this._repository,
     required this._preferences,
+    this._storage,
     required this.currentUserId,
     required this.currentUserName,
     required this.currentUserEmail,
@@ -41,6 +43,9 @@ class EventsModel extends ChangeNotifier {
 
   final EventRepository _repository;
   final PreferencesService _preferences;
+
+  /// Хмарне сховище для обкладинок (лаб. №6). null — у тестах.
+  final StorageRepository? _storage;
   final String currentUserId;
   final String currentUserName;
   final String currentUserEmail;
@@ -221,8 +226,12 @@ class EventsModel extends ChangeNotifier {
     required DateTime endDateTime,
     required String location,
     required int participantLimit,
+    PickedImage? cover,
   }) {
     return _save(() async {
+      // Спершу файл потрапляє в сховище, а в Firestore зберігається
+      // лише посилання на нього.
+      final coverUrl = await _uploadCover(cover);
       final created = await _repository.createEvent(
         VolunteerEvent(
           id: '',
@@ -235,25 +244,46 @@ class EventsModel extends ChangeNotifier {
           participantLimit: participantLimit,
           organizerId: currentUserId,
           organizerName: currentUserName,
+          coverUrl: coverUrl,
         ),
       );
       _events.add(created);
     });
   }
 
-  /// FR-10. Редагування заходу (лише організатор).
-  Future<bool> updateEvent(VolunteerEvent event) {
+  /// FR-10. Редагування заходу (лише організатор). [newCover] — нова
+  /// обкладинка, [removeCover] — прибрати наявну.
+  Future<bool> updateEvent(
+    VolunteerEvent event, {
+    PickedImage? newCover,
+    bool removeCover = false,
+  }) {
+    final oldCoverUrl = eventById(event.id)?.coverUrl;
     return _save(() async {
-      final updated = await _repository.updateEvent(event);
+      var toSave = event;
+      if (newCover != null) {
+        toSave = event.copyWith(coverUrl: await _uploadCover(newCover));
+      } else if (removeCover) {
+        toSave = event.copyWith(clearCover: true);
+      }
+
+      final updated = await _repository.updateEvent(toSave);
       final index = _events.indexWhere((e) => e.id == updated.id);
       if (index != -1) _events[index] = updated;
+
+      // Старий файл більше не потрібен — прибираємо його зі сховища.
+      if (oldCoverUrl != null && oldCoverUrl != updated.coverUrl) {
+        await _storage?.deleteByUrl(oldCoverUrl);
+      }
     });
   }
 
   /// FR-11. Видалення заходу разом з учасниками.
   Future<bool> deleteEvent(String eventId) {
     return _save(() async {
+      final coverUrl = eventById(eventId)?.coverUrl;
       await _repository.deleteEvent(eventId);
+      if (coverUrl != null) await _storage?.deleteByUrl(coverUrl);
       _events.removeWhere((e) => e.id == eventId);
       _participants.removeWhere((p) => p.eventId == eventId);
     });
@@ -283,7 +313,7 @@ class EventsModel extends ChangeNotifier {
     final participation = myParticipation(event.id);
     if (participation == null) return Future.value(false);
     return _save(() async {
-      await _repository.removeParticipant(participation.id);
+      await _repository.removeParticipant(participation);
       _participants.removeWhere((p) => p.id == participation.id);
     });
   }
@@ -305,9 +335,15 @@ class EventsModel extends ChangeNotifier {
   /// FR-13. Організатор видаляє учасника зі списку.
   Future<bool> removeParticipant(Participant participant) {
     return _save(() async {
-      await _repository.removeParticipant(participant.id);
+      await _repository.removeParticipant(participant);
       _participants.removeWhere((p) => p.id == participant.id);
     });
+  }
+
+  /// Завантажує обкладинку в Supabase Storage і повертає посилання.
+  Future<String?> _uploadCover(PickedImage? cover) async {
+    if (cover == null || _storage == null) return null;
+    return _storage.uploadImage(cover, folder: 'covers/$currentUserId');
   }
 
   /// Спільна обгортка для змін: стан збереження, блокування повторного
@@ -321,6 +357,9 @@ class EventsModel extends ChangeNotifier {
     try {
       await action();
       return true;
+    } on StorageException catch (e) {
+      _errorMessage = e.message;
+      return false;
     } catch (_) {
       _errorMessage = 'Не вдалося зберегти зміни. Спробуйте ще раз.';
       return false;

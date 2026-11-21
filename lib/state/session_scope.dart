@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import '../data/repositories/event_repository.dart';
+import '../data/repositories/firestore_event_repository.dart';
+import '../data/repositories/storage_repository.dart';
 import '../data/services/preferences_service.dart';
 import 'auth_model.dart';
 import 'events_model.dart';
@@ -25,17 +27,15 @@ class SessionScope extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        // Лаб. №6: дані з Cloud Firestore замість тестових даних.
         Provider<EventRepository>(
-          create: (_) => InMemoryEventRepository(
-            currentUserId: user.uid,
-            currentUserName: name,
-            currentUserEmail: user.email ?? '',
-          ),
+          create: (_) => FirestoreEventRepository(),
         ),
         ChangeNotifierProvider(
           create: (context) => EventsModel(
             repository: context.read<EventRepository>(),
             preferences: context.read<PreferencesService>(),
+            storage: context.read<StorageRepository>(),
             currentUserId: user.uid,
             currentUserName: name,
             currentUserEmail: user.email ?? '',

@@ -2,9 +2,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
+import 'core/config/supabase_config.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/auth_repository.dart';
+import 'data/repositories/storage_repository.dart';
+import 'data/repositories/user_repository.dart';
 import 'data/services/preferences_service.dart';
 import 'firebase_options.dart';
 import 'screens/auth/auth_gate.dart';
@@ -30,6 +34,11 @@ Future<void> main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      // Supabase використовується лише як файлове сховище (лаб. №6).
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+      );
       runApp(
         // Глобальні залежності та стан, що живуть увесь час роботи
         // застосунку: репозиторій автентифікації, сховище налаштувань,
@@ -38,12 +47,23 @@ Future<void> main() async {
           providers: [
             Provider(create: (_) => AuthRepository()),
             Provider(create: (_) => PreferencesService()),
-            ChangeNotifierProvider(
-              create: (context) => AuthModel(context.read<AuthRepository>()),
+            // Лаб. №6: профілі в Firestore і файли в Supabase Storage.
+            Provider<UserRepository>(create: (_) => FirestoreUserRepository()),
+            Provider<StorageRepository>(
+              create: (_) => SupabaseStorageRepository(),
             ),
             ChangeNotifierProvider(
-              create: (context) =>
-                  ProfileModel(context.read<AuthRepository>()),
+              create: (context) => AuthModel(
+                context.read<AuthRepository>(),
+                users: context.read<UserRepository>(),
+              ),
+            ),
+            ChangeNotifierProvider(
+              create: (context) => ProfileModel(
+                context.read<AuthRepository>(),
+                users: context.read<UserRepository>(),
+                storage: context.read<StorageRepository>(),
+              ),
             ),
           ],
           child: const VolunteerHubApp(),

@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../core/utils/image_file_picker.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../data/repositories/storage_repository.dart';
 
-/// Результат вибору: url == null означає «видалити фото».
+/// Результат вибору: готове посилання [url], файл з пристрою [file]
+/// (лаб. №6) або «видалити фото» (обидва null).
 class AvatarChoice {
   final String? url;
-  const AvatarChoice(this.url);
+  final PickedImage? file;
+  const AvatarChoice(this.url) : file = null;
+  const AvatarChoice.file(PickedImage this.file) : url = null;
 }
 
 /// Діалог вибору фото профілю (FR-06): готові аватарки за HTTPS-посиланнями
@@ -54,6 +59,21 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
     super.dispose();
   }
 
+  String? _fileError;
+
+  /// FR-06. Фото з пристрою: формат і розмір перевіряються одразу,
+  /// а саме завантаження в Supabase Storage виконує ProfileModel.
+  Future<void> _onUploadFromDevice() async {
+    final image = await pickImageFile();
+    if (image == null || !mounted) return;
+    try {
+      SupabaseStorageRepository.validate(image);
+      Navigator.of(context).pop(AvatarChoice.file(image));
+    } on StorageException catch (e) {
+      setState(() => _fileError = e.message);
+    }
+  }
+
   void _onPreviewCustomUrl() {
     if (!_customUrlFormKey.currentState!.validate()) return;
     setState(() => _selectedUrl = _customUrlController.text.trim());
@@ -84,8 +104,27 @@ class _AvatarPickerDialogState extends State<AvatarPickerDialog> {
               Center(
                 child: Text('Попередній перегляд', style: textTheme.bodySmall),
               ),
+              const SizedBox(height: 16),
+              Center(
+                child: FilledButton.tonalIcon(
+                  onPressed: _onUploadFromDevice,
+                  icon: const Icon(Icons.upload_outlined),
+                  label: const Text('Завантажити з пристрою'),
+                ),
+              ),
+              if (_fileError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    child: Text(
+                      _fileError!,
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: colorScheme.error),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 24),
-              Text('Оберіть готове зображення', style: textTheme.titleSmall),
+              Text('Або оберіть готове зображення', style: textTheme.titleSmall),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,

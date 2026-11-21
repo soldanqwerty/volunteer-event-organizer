@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 /// Пріоритет завдання.
@@ -49,6 +50,37 @@ class EventTask {
     this.assigneeId,
     this.assigneeName,
   });
+
+  /// Документ підколекції `events/{eventId}/tasks/{taskId}`.
+  factory EventTask.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    return EventTask(
+      id: doc.id,
+      eventId: data['eventId'] as String,
+      title: data['title'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      dueDate: (data['dueDate'] as Timestamp).toDate(),
+      priority: TaskPriority.values.asNameMap()[data['priority']] ??
+          TaskPriority.medium,
+      status: TaskStatus.values.asNameMap()[data['status']] ??
+          TaskStatus.newTask,
+      assigneeId: data['assigneeId'] as String?,
+      assigneeName: data['assigneeName'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() => {
+        'eventId': eventId,
+        'title': title,
+        'description': description,
+        'dueDate': Timestamp.fromDate(dueDate),
+        'priority': priority.name,
+        'status': status.name,
+        'assigneeId': assigneeId,
+        'assigneeName': assigneeName,
+      };
 
   /// [clearAssignee] потрібен, бо через copyWith(assigneeId: null)
   /// неможливо відрізнити «не змінювати» від «прибрати виконавця».

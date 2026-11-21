@@ -152,10 +152,10 @@ class TasksModel extends ChangeNotifier {
       updateTask(task.copyWith(status: status));
 
   /// FR-17.
-  Future<bool> deleteTask(String taskId) {
+  Future<bool> deleteTask(EventTask task) {
     return _save(() async {
-      await _repository.deleteTask(taskId);
-      _tasks.removeWhere((t) => t.id == taskId);
+      await _repository.deleteTask(task);
+      _tasks.removeWhere((t) => t.id == task.id);
     });
   }
 

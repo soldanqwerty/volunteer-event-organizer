@@ -24,11 +24,13 @@ enum RegistrationBadge {
   }
 }
 
-/// «Обкладинка» заходу. Фото ще не завантажуються (з'являться разом
-/// зі сховищем файлів), тому замість фото — градієнт кольору категорії
-/// з великою іконкою.
+/// Обкладинка заходу: фото із Supabase Storage (лаб. №6), а якщо його
+/// немає або воно не завантажилось — градієнт кольору категорії з іконкою.
 class EventCover extends StatelessWidget {
   final EventCategory category;
+
+  /// Посилання на фото обкладинки (VolunteerEvent.coverUrl).
+  final String? imageUrl;
   final double iconSize;
 
   /// Мітки поверх обкладинки, наприклад категорія чи «Реєстрація відкрита».
@@ -39,6 +41,7 @@ class EventCover extends StatelessWidget {
   const EventCover({
     super.key,
     required this.category,
+    this.imageUrl,
     this.iconSize = 48,
     this.topLeft,
     this.bottomLeft,
@@ -66,27 +69,41 @@ class EventCover extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  color.withValues(alpha: 0.35),
-                  color.withValues(alpha: 0.75),
-                ],
-              ),
-            ),
-            child: Icon(
-              iconOf(category),
-              size: iconSize,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
+          if (imageUrl != null)
+            Image.network(
+              imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _placeholder(color),
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : _placeholder(color),
+            )
+          else
+            _placeholder(color),
           if (topLeft != null) Positioned(top: 8, left: 8, child: topLeft!),
           if (bottomLeft != null)
             Positioned(bottom: 8, left: 8, child: bottomLeft!),
         ],
+      ),
+    );
+  }
+
+  Widget _placeholder(Color color) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.35),
+            color.withValues(alpha: 0.75),
+          ],
+        ),
+      ),
+      child: Icon(
+        iconOf(category),
+        size: iconSize,
+        color: Colors.white.withValues(alpha: 0.9),
       ),
     );
   }

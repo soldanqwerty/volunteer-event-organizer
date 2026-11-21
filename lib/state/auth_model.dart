@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/user_repository.dart';
 import '../data/services/analytics_service.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
@@ -15,11 +16,14 @@ enum AuthStatus { unknown, authenticated, unauthenticated }
 /// входу та відновлення пароля викликають методи моделі й показують
 /// стан завантаження через [isLoading] та помилку через [errorMessage].
 class AuthModel extends ChangeNotifier {
-  AuthModel(this._repository) {
+  AuthModel(this._repository, {this._users}) {
     _subscription = _repository.userChanges().listen(_onUserChanged);
   }
 
   final AuthRepository _repository;
+
+  /// Документи профілів `users/{uid}` у Firestore (лаб. №6).
+  final UserRepository? _users;
   late final StreamSubscription<User?> _subscription;
 
   AuthStatus _status = AuthStatus.unknown;
@@ -44,6 +48,13 @@ class AuthModel extends ChangeNotifier {
   Future<bool> signIn({required String email, required String password}) {
     return _run(() async {
       await _repository.signIn(email: email, password: password);
+      // Для акаунтів, створених до лаб. №6, документ профілю з'явиться
+      // після першого входу (merge не перезаписує наявні поля).
+      final user = _repository.currentUser;
+      if (user != null) {
+        await _saveProfileQuietly(() =>
+            _users?.saveProfile(uid: user.uid, email: user.email));
+      }
       AnalyticsService.logLogin();
     });
   }
@@ -62,6 +73,16 @@ class AuthModel extends ChangeNotifier {
         firstName: firstName,
         lastName: lastName,
       );
+      // Профіль користувача в Firestore (об'єкт даних «Користувач»).
+      final user = _repository.currentUser;
+      if (user != null) {
+        await _saveProfileQuietly(() => _users?.saveProfile(
+              uid: user.uid,
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              email: user.email,
+            ));
+      }
       AnalyticsService.logSignUp();
     });
   }
@@ -77,6 +98,16 @@ class AuthModel extends ChangeNotifier {
   /// FR-04. Вихід: потік userChanges() поверне null, і AuthGate
   /// автоматично покаже екран входу.
   Future<bool> signOut() => _run(_repository.signOut);
+
+  /// Помилка запису профілю в Firestore не повинна зривати вхід:
+  /// документ буде створено під час наступного входу чи зміни профілю.
+  Future<void> _saveProfileQuietly(Future<void>? Function() save) async {
+    try {
+      await save();
+    } catch (e) {
+      debugPrint('Не вдалося зберегти профіль у Firestore: $e');
+    }
+  }
 
   /// Спільна обгортка для асинхронних дій: блокує повторний виклик,
   /// вмикає стан завантаження та перехоплює помилку.

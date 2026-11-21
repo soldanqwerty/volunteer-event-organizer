@@ -5,8 +5,8 @@
 class SupabaseConfig {
   SupabaseConfig._();
 
-  static const url = 'https://YOUR-PROJECT.supabase.co';
-  static const anonKey = 'YOUR-ANON-KEY';
+  static const url = 'https://cewewiyndntwphcmiexh.supabase.co';
+  static const anonKey = 'sb_publishable_vvLGkYESOaq9tWNOeqTRJA_i-rXS-mT';
 
   /// Публічний bucket для обкладинок заходів і фото профілю.
   static const bucket = 'images';
